@@ -1,0 +1,53 @@
+# Virtual environment
+.venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment variables / secrets
+.env
+.env.*
+!.env.example
+
+# uv
+.uv/
+
+# IDE
+.vscode/
+.idea/
+
+# macOS
+.DS_Store
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# Jupyter
+.ipynb_checkpoints
+test.ipynb
+
+# Claude Code local state
+.claude/
+
+# Insurance PDFs (real PII) and derived vector store
+data/
+vectordb/
+
+# SQLite DBs (backend/policies.db etc.)
+*.db
+
+# Backend uploaded policy files
+backend/uploads/
+
+# Voice scratch artifacts
+response.mp3
+temp.wav
