@@ -5,7 +5,7 @@ from chains.query_rewriter import query_rewriter
 from chains.policy_detector import policy_detector
 from chains.insurance_chain import chain
 
-from rag.retriever import retriever, vectordb
+from rag.retriever import retriever, get_hybrid_retriever
 
 
 REWRITE_TERMS = [
@@ -32,7 +32,7 @@ def rewrite_query(query):
     )
 
 
-def ask_insurance_bot(query, chat_history):
+def ask_insurance_bot(query, chat_history, policy_id=None):
 
     timings = {}
 
@@ -91,15 +91,17 @@ def ask_insurance_bot(query, chat_history):
 
     try:
 
-        if policy_type in ["health", "life"]:
+        if policy_id is not None:
 
-            docs = vectordb.similarity_search(
-                rewritten_query,
-                k=5,
-                filter={
-                    "policy_type": policy_type
-                }
-            )
+            docs = get_hybrid_retriever(
+                metadata_filter={"policy_id": str(policy_id)}
+            ).invoke(rewritten_query)
+
+        elif policy_type in ["health", "life"]:
+
+            docs = get_hybrid_retriever(
+                metadata_filter={"policy_type": policy_type}
+            ).invoke(rewritten_query)
 
         else:
 

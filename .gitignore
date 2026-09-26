@@ -51,3 +51,8 @@ backend/uploads/
 # Voice scratch artifacts
 response.mp3
 temp.wav
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+*.tsbuildinfo

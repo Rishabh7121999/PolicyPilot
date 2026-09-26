@@ -5,6 +5,7 @@
 The project today is a single-PDF-pair RAG chatbot: `rag/ingest.py` loads two hardcoded PDFs with `PyPDFLoader` (which flattens tables — sum-insured schedules, waiting-period grids, benefit tables — into garbled inline text) and slices them with a blind `RecursiveCharacterTextSplitter(1000/200)` that ignores section boundaries. Retrieval quality suffers because chunks can separate a waiting-period label from its value, or split a table mid-row.
 
 The user wants two things beyond a better chatbot:
+
 1. **Better chunking** for these insurance PDFs, so retrieval is grounded in real document structure instead of arbitrary character counts.
 2. **A single view that surfaces key policy information at a glance** (sum insured, premium, dates, waiting periods, exclusions, etc.) instead of making the user read the raw PDF — and this should support **multiple policies**, including future user uploads, not just the two hardcoded PDFs.
 
@@ -52,6 +53,7 @@ frontend/                       NEW — Vite + React + TS + Tailwind SPA
 ## Phase 0 — Hygiene (do first)
 
 The repo has **no git commits yet**, and `.gitignore` currently only excludes `__pycache__`/`.venv`. Two real issues to fix before anything else, since there's no history to clean up yet:
+
 - `voice/tts.py` has a **hardcoded, live ElevenLabs API key** in source (`client = ElevenLabs(api_key="sk_...")`). Move it to `.env` as `ELEVENLABS_API_KEY`. Flag to the user that they should rotate this key on ElevenLabs' dashboard regardless, since it's been visible in a readable file.
 - Update `.gitignore` to add `data/` (real PII PDFs), `vectordb/`, `.env`, `*.db`, `backend/uploads/`, `response.mp3`, `temp.wav`.
 
@@ -60,6 +62,7 @@ The repo has **no git commits yet**, and `.gitignore` currently only excludes `_
 Add `backend/config.py`, `db.py`, `models.py`, `schemas.py`, `main.py`.
 
 `Policy` model (SQLAlchemy 2.0 declarative, `backend/models.py`):
+
 - `id`, `policy_type` ("health"/"life"), `insurer`, `product_name`, `source_file`, `file_path`, `status` (processing/ready/failed), `error_message`, `summary_json` (JSON column), `chunk_count`, `created_at`, `updated_at`.
 
 `backend/db.py`: `sqlite:///backend/policies.db`, `connect_args={"check_same_thread": False}` (required since the background job runs on a threadpool thread and opens its own `SessionLocal()` rather than reusing the request-scoped session). `Base.metadata.create_all(engine)` on startup — no Alembic, single-table personal app.
@@ -81,6 +84,7 @@ Known rough edges to expect: Docling downloads layout/TableFormer models from HF
 ## Phase 3 — Structured extraction, standalone
 
 `chains/policy_summary_chain.py`, following the existing `chains/*.py` LCEL pattern:
+
 - Pydantic `WaitingPeriod {condition, duration}` and `PolicySummary` (policy_number, insurer, product_name, policyholder_name, sum_insured, premium_amount, premium_due_date, policy_start_date, policy_end_date, plan_variant, riders: list[str], waiting_periods: list[WaitingPeriod], key_exclusions: list[str], nominee, claim_process_summary) — all fields optional since not every field applies to every policy type.
 - `ChatGoogleGenerativeAI(model="gemini-2.5-flash-lite").with_structured_output(PolicySummary)`, prompted with the full document text.
 - **Feed it the full `full_text` from `rag/loader.py`**, not a heading-matched subset: Gemini 2.5 Flash-Lite's 1M-token context makes size a non-issue even for 50 pages, this runs once per policy as an already-budgeted background job, and matching on section headings would be brittle (insurers phrase things inconsistently) for a savings that doesn't matter here.
@@ -92,12 +96,15 @@ Test standalone by running it against one seed PDF's `full_text` and eyeballing 
 `backend/services/ingestion.py::run_ingestion_job(policy_id)`: opens its own DB session, loads the row, calls `parse_and_chunk`, `get_vectordb().add_documents(...)`, calls `extract_policy_summary(full_text)`, writes `summary_json`/`chunk_count`/`status="ready"`; on any exception sets `status="failed"` + `error_message`.
 
 `backend/routers/policies.py`:
+
 - `POST /policies/upload` — multipart (`file`, `policy_type` supplied by the user, not auto-classified). Creates the row (`status="processing"`), saves to `backend/uploads/{id}/{filename}`, schedules `background_tasks.add_task(run_ingestion_job, policy.id)` (FastAPI's `BackgroundTasks` runs sync functions via Starlette's threadpool — no Celery/Redis needed), returns `{id, status}` immediately.
 - `GET /policies` — lightweight list (excludes `summary_json`).
 - `GET /policies/{id}` — full row incl. `summary_json`; the frontend polls this during ingestion.
 - `DELETE /policies/{id}` — removes the Chroma chunks (`vectordb.delete(where={"policy_id": str(id)})`), the uploaded file, and the row.
 
 A process restart mid-job leaves a row stuck at `"processing"` — acceptable for a personal app (no retry queue; recovery is re-upload). Validate with a manual `curl -F` upload against a seed PDF, poll until `ready`.
+
+Converting more than one PDF in the same process triggers a flaky native segfault (loky/joblib resource-tracker teardown race in Docling's dependency stack) — confirmed via faulthandler repro. Fixed by having ingest.py isolate each PDF conversion in its own subprocess. Worth knowing for Phase 4: the planned FastAPI BackgroundTasks approach runs in-process across the server's lifetime, so this same crash could eventually kill the backend after a couple of uploads — when you get to Phase 4, either subprocess-isolate run_ingestion_job the same way, or use a process pool.
 
 ## Phase 5 — Chat + voice endpoints
 

@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.config import VITE_DEV_ORIGIN
 from backend.db import Base, engine
-from backend.routers import policies
+from backend.routers import chat, policies, voice
 
 
 @asynccontextmanager
@@ -25,3 +25,5 @@ app.add_middleware(
 )
 
 app.include_router(policies.router)
+app.include_router(chat.router)
+app.include_router(voice.router)

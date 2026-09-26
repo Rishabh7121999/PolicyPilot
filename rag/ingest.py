@@ -6,6 +6,10 @@ import sys
 
 from dotenv import load_dotenv
 
+from rag.loader import parse_and_chunk
+from rag.vectorstore import get_vectordb
+from rag.vectorstore import PERSIST_DIRECTORY
+
 load_dotenv()
 
 if not os.getenv("GOOGLE_API_KEY"):
@@ -13,7 +17,7 @@ if not os.getenv("GOOGLE_API_KEY"):
 
 PDF_FILES = {
     "health": [
-        "data/Health_Insurance.pdf",
+        # "data/Health_Insurance.pdf",
         "data/Health_Insurance_2026.pdf",
         "data/Health_TopUp_2026.pdf",
     ],
@@ -24,8 +28,6 @@ PDF_FILES = {
 
 
 def _ingest_single(policy_type: str, pdf_path: str) -> int:
-    from rag.loader import parse_and_chunk
-    from rag.vectorstore import get_vectordb
 
     chunks, _full_text = parse_and_chunk(pdf_path, policy_type=policy_type)
     get_vectordb().add_documents(chunks)
@@ -54,8 +56,6 @@ def main():
         n = _ingest_single(policy_type, pdf_path)
         print(f"  {n} chunks")
         return
-
-    from rag.vectorstore import PERSIST_DIRECTORY
 
     if args.rebuild and os.path.exists(PERSIST_DIRECTORY):
         print("Deleting existing vector database...")

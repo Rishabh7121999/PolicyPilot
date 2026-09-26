@@ -16,11 +16,11 @@ dependencies = [
     "python-dotenv>=1.2.2",
     "streamlit>=1.58.0",
     "faster-whisper>=1.2.1",
-    "elevenlabs>=2.53.0",
     "torchvision>=0.27.1",
     "fastapi>=0.138.0",
     "uvicorn>=0.49.0",
     "sqlalchemy>=2.0",
     "python-multipart>=0.0.32",
     "docling>=2.130.0",
+    "rank-bm25>=0.2.2",
 ]

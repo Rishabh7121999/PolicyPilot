@@ -1,28 +1,39 @@
-from urllib import response
-from dotenv import load_dotenv
 import os
+
+from dotenv import load_dotenv
+from google import genai
+from google.genai import types
+
 load_dotenv()
 
-from elevenlabs.client import ElevenLabs
+TTS_MODEL = "gemini-3.8-flash-lite-tts"
+VOICE_NAME = "Kore"
 
-ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
-client = ElevenLabs(
-    api_key=ELEVENLABS_API_KEY
-)
+_client = None
 
-def speak(text):
 
-    audio = client.text_to_speech.convert(
-        voice_id="EXAVITQu4vr4xnSDxMaL",
-        text=text
+def _get_client() -> genai.Client:
+    global _client
+
+    if _client is None:
+        _client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
+
+    return _client
+
+
+def speak(text: str) -> bytes:
+    """Synthesize speech for `text` and return WAV audio bytes."""
+    response = _get_client().models.generate_content(
+        model=TTS_MODEL,
+        contents=text,
+        config=types.GenerateContentConfig(
+            response_modalities=["AUDIO"],
+            speech_config=types.SpeechConfig(
+                voice_config=types.VoiceConfig(
+                    prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=VOICE_NAME)
+                )
+            ),
+        ),
     )
 
-    with open(
-        "response.mp3",
-        "wb"
-    ) as f:
-
-        for chunk in audio:
-            f.write(chunk)
-
-    return "response.mp3"
+    return response.candidates[0].content.parts[0].inline_data.data
