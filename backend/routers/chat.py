@@ -1,8 +1,8 @@
 from fastapi import APIRouter
 
 from backend.schemas import ChatRequest, ChatResponse
-from chains.clarification_chain import clarification_chain
-from core.insurance_bot import ask_insurance_bot
+from backend.chains.clarification_chain import clarification_chain
+from backend.core.insurance_bot import ask_insurance_bot
 
 router = APIRouter(tags=["chat"])
 

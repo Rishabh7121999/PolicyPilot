@@ -1,11 +1,11 @@
 import time
 from concurrent.futures import ThreadPoolExecutor
 
-from chains.query_rewriter import query_rewriter
-from chains.policy_detector import policy_detector
-from chains.insurance_chain import chain
+from backend.chains.query_rewriter import query_rewriter
+from backend.chains.policy_detector import policy_detector
+from backend.chains.insurance_chain import chain
 
-from rag.retriever import retriever, get_hybrid_retriever
+from backend.rag.retriever import retriever, get_hybrid_retriever
 
 
 REWRITE_TERMS = [

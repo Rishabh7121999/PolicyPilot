@@ -10,8 +10,8 @@ from backend.db import get_db
 from backend.models import Policy
 from backend.schemas import PolicyDetail, PolicyListItem, PolicyUploadResponse
 from backend.services.ingestion import run_ingestion_job
-from rag.retriever import invalidate_bm25_cache
-from rag.vectorstore import get_vectordb
+from backend.rag.retriever import invalidate_bm25_cache
+from backend.rag.vectorstore import get_vectordb
 
 router = APIRouter(prefix="/policies", tags=["policies"])
 

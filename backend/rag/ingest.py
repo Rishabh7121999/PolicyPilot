@@ -6,9 +6,9 @@ import sys
 
 from dotenv import load_dotenv
 
-from rag.loader import parse_and_chunk
-from rag.vectorstore import get_vectordb
-from rag.vectorstore import PERSIST_DIRECTORY
+from backend.rag.loader import parse_and_chunk
+from backend.rag.vectorstore import get_vectordb
+from backend.rag.vectorstore import PERSIST_DIRECTORY
 
 load_dotenv()
 
@@ -76,7 +76,7 @@ def main():
                 [
                     sys.executable,
                     "-m",
-                    "rag.ingest",
+                    "backend.rag.ingest",
                     "--single",
                     policy_type,
                     pdf_path,

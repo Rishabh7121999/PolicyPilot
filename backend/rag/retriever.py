@@ -4,7 +4,7 @@ from langchain_core.documents import Document
 from langchain_classic.retrievers import ContextualCompressionRetriever, EnsembleRetriever
 from langchain_classic.retrievers.document_compressors import CrossEncoderReranker
 
-from rag.vectorstore import get_vectordb
+from backend.rag.vectorstore import get_vectordb
 
 RERANKER_MODEL_NAME = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 

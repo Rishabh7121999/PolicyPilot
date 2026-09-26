@@ -9,8 +9,8 @@ from langchain_core.documents import Document
 from backend.config import BASE_DIR
 from backend.db import SessionLocal
 from backend.models import Policy
-from rag.retriever import invalidate_bm25_cache
-from rag.vectorstore import get_vectordb
+from backend.rag.retriever import invalidate_bm25_cache
+from backend.rag.vectorstore import get_vectordb
 
 
 def run_ingestion_job(policy_id: int) -> None:
@@ -38,7 +38,7 @@ def run_ingestion_job(policy_id: int) -> None:
                 [
                     sys.executable,
                     "-m",
-                    "rag.ingest_worker",
+                    "backend.rag.ingest_worker",
                     "--policy-type", policy.policy_type,
                     "--pdf-path", policy.file_path,
                     "--policy-id", str(policy.id),

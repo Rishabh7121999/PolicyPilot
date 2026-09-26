@@ -2,7 +2,7 @@
 
 Docling's model stack has a flaky native crash (loky/joblib resource-tracker
 teardown race on macOS) when more than one PDF is converted in the same
-process. `rag/ingest.py`'s CLI batch works around this by shelling out to a
+process. `backend/rag/ingest.py`'s CLI batch works around this by shelling out to a
 fresh subprocess per file; the FastAPI upload flow (backend/services/ingestion.py)
 needs the same isolation since it runs in-process across the server's whole
 lifetime, so a couple of uploads could otherwise eventually crash the backend.
@@ -22,8 +22,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from rag.loader import parse_and_chunk
-from chains.policy_summary_chain import extract_policy_summary
+from backend.rag.loader import parse_and_chunk
+from backend.chains.policy_summary_chain import extract_policy_summary
 
 
 def main():

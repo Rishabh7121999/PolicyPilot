@@ -11,7 +11,7 @@ from docling_core.transforms.chunker.hybrid_chunker import HybridChunker
 from docling_core.transforms.chunker.tokenizer.huggingface import HuggingFaceTokenizer
 from langchain_core.documents import Document
 
-from rag.vectorstore import EMBEDDING_MODEL_NAME
+from backend.rag.vectorstore import EMBEDDING_MODEL_NAME
 
 
 def _build_converter() -> DocumentConverter:

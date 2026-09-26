@@ -5,8 +5,8 @@ from fastapi import APIRouter, File, UploadFile
 from fastapi.responses import Response
 
 from backend.schemas import VoiceSpeakRequest
-from voice.stt import transcribe
-from voice.tts import speak
+from backend.voice.stt import transcribe
+from backend.voice.tts import speak
 
 router = APIRouter(prefix="/voice", tags=["voice"])
 

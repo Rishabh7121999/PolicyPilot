@@ -1,11 +1,11 @@
-from pathlib import Path
-
 from langchain_chroma import Chroma
 from langchain_community.embeddings import HuggingFaceEmbeddings
 
+from backend.config import VECTORDB_DIR
+
 EMBEDDING_MODEL_NAME = "BAAI/bge-small-en-v1.5"
 
-PERSIST_DIRECTORY = str(Path(__file__).resolve().parent.parent / "vectordb")
+PERSIST_DIRECTORY = str(VECTORDB_DIR)
 
 _embeddings = None
 _vectordb = None
