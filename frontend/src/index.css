@@ -1,9 +1,61 @@
 @import 'tailwindcss';
 
+@theme {
+  --color-sage-50: #f2f6ef;
+  --color-sage-100: #e3ecdc;
+  --color-sage-200: #c8dab9;
+  --color-sage-300: #a7c391;
+  --color-sage-400: #86a96f;
+  --color-sage-500: #6b9151;
+  --color-sage-600: #53753e;
+  --color-sage-700: #435e33;
+  --color-sage-800: #384c2c;
+  --color-sage-900: #2f4026;
+
+  --color-teal-50: #eef5f4;
+  --color-teal-100: #d9e9e7;
+  --color-teal-200: #b3d3cf;
+  --color-teal-300: #85b6b1;
+  --color-teal-400: #5c9793;
+  --color-teal-500: #427c78;
+  --color-teal-600: #366461;
+  --color-teal-700: #2e514f;
+  --color-teal-800: #284342;
+  --color-teal-900: #233938;
+
+  --color-cream-50: #fdfbf6;
+  --color-cream-100: #faf6ec;
+  --color-cream-200: #f3ecd9;
+
+  --color-peach-100: #fbe9dd;
+  --color-peach-200: #f6d3ba;
+  --color-peach-300: #edb489;
+
+  --color-beige-50: #f8f5ee;
+  --color-beige-100: #efe9d9;
+  --color-beige-200: #e2d8bf;
+}
+
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
 }
 
 body {
   margin: 0;
+  background-color: var(--color-cream-50);
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.15s ease-out;
 }

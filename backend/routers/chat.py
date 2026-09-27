@@ -1,29 +1,42 @@
-from fastapi import APIRouter
+import json
 
-from backend.schemas import ChatRequest, ChatResponse
-from backend.chains.clarification_chain import clarification_chain
-from backend.core.insurance_bot import ask_insurance_bot
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
+from sqlalchemy.orm import Session
+
+from backend.db import get_db
+from backend.deps import get_current_user
+from backend.models import Policy, User
+from backend.schemas import ChatRequest
+from backend.services.chat_service import answer_question_stream
 
 router = APIRouter(tags=["chat"])
 
 
-@router.post("/chat", response_model=ChatResponse)
-def chat(request: ChatRequest):
-    if request.policy_id is None:
-        clarification = clarification_chain.invoke({"question": request.message})
+@router.post("/chat")
+def chat(
+    request: ChatRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Streams newline-delimited JSON events: `meta` (once, as soon as scoping
+    is resolved), `token` (one per generated chunk), then `done` (final
+    answer + sources)."""
 
-        if clarification.get("needs_clarification"):
-            return ChatResponse(
-                answer=clarification["clarification_question"],
-                needs_clarification=True,
-                clarification_question=clarification["clarification_question"],
-            )
+    if request.policy_id is not None:
+        policy = db.get(Policy, request.policy_id)
+        if policy is None or policy.user_id != current_user.id:
+            raise HTTPException(status_code=404, detail="Policy not found")
 
-    result = ask_insurance_bot(request.message, request.history, request.policy_id)
+    def event_stream():
+        for event in answer_question_stream(
+            request.message,
+            request.history,
+            request.policy_id,
+            db=db,
+            voice=request.voice,
+            user_id=current_user.id,
+        ):
+            yield json.dumps(event) + "\n"
 
-    return ChatResponse(
-        answer=result["answer"],
-        sources=result["sources"],
-        policy_type=result["policy_type"],
-        timings=result["timings"],
-    )
+    return StreamingResponse(event_stream(), media_type="application/x-ndjson")

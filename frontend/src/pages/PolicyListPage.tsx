@@ -1,82 +1,75 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { deletePolicy, listPolicies } from '../api/client'
-import { StatusBadge } from '../components/StatusBadge'
-import { UploadPolicyDialog } from '../components/UploadPolicyDialog'
-import type { PolicyListItem } from '../api/types'
+import { listPolicies } from '../api/client'
+import { PolicyCard } from '../components/PolicyCard'
+import { UploadIcon } from '../components/icons'
+import { useAppShell } from '../context/AppShellContext'
+import type { PolicyListItem, PolicyType } from '../api/types'
+
+const FILTERS: { label: string; value: PolicyType | 'all' }[] = [
+  { label: 'All', value: 'all' },
+  { label: 'Health', value: 'health' },
+  { label: 'Life', value: 'life' },
+  { label: 'Motor', value: 'motor' },
+]
 
 export function PolicyListPage() {
   const [policies, setPolicies] = useState<PolicyListItem[]>([])
   const [loading, setLoading] = useState(true)
-  const [showUpload, setShowUpload] = useState(false)
-
-  async function refresh() {
-    const data = await listPolicies()
-    setPolicies(data)
-    setLoading(false)
-  }
+  const [filter, setFilter] = useState<PolicyType | 'all'>('all')
+  const { policiesVersion, openUploadDialog } = useAppShell()
 
   useEffect(() => {
-    refresh()
-  }, [])
+    listPolicies().then((data) => {
+      setPolicies(data)
+      setLoading(false)
+    })
+  }, [policiesVersion])
 
-  async function handleDelete(id: number) {
-    if (!confirm('Delete this policy? This removes its file and indexed data.')) return
-    await deletePolicy(id)
-    refresh()
-  }
+  const filtered = filter === 'all' ? policies : policies.filter((p) => p.policy_type === filter)
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8">
+    <div className="mx-auto max-w-6xl px-6 py-8">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-neutral-900 dark:text-neutral-100">
-          Your Policies
-        </h1>
+        <h1 className="text-xl font-semibold text-neutral-900">My Policies</h1>
         <button
-          onClick={() => setShowUpload(true)}
-          className="rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200"
+          type="button"
+          onClick={openUploadDialog}
+          className="flex items-center gap-2 rounded-xl bg-sage-700 px-4 py-2.5 text-sm font-medium text-white hover:bg-sage-800"
         >
+          <UploadIcon className="h-4 w-4" />
           Upload Policy
         </button>
       </div>
 
+      <div className="mt-5 flex gap-2">
+        {FILTERS.map((f) => (
+          <button
+            key={f.value}
+            type="button"
+            onClick={() => setFilter(f.value)}
+            className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
+              filter === f.value
+                ? 'bg-sage-700 text-white'
+                : 'bg-white text-neutral-600 hover:bg-beige-100'
+            }`}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+
       {loading ? (
         <p className="mt-8 text-sm text-neutral-500">Loading…</p>
-      ) : policies.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <p className="mt-8 text-sm text-neutral-500">
-          No policies yet. Upload a PDF to get started.
+          No policies here yet. Upload a PDF to get started.
         </p>
       ) : (
-        <ul className="mt-6 space-y-3">
-          {policies.map((policy) => (
-            <li
-              key={policy.id}
-              className="flex items-center justify-between rounded-xl border border-neutral-200 p-4 dark:border-neutral-800"
-            >
-              <Link to={`/policies/${policy.id}`} className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-neutral-900 dark:text-neutral-100">
-                    {policy.product_name ?? policy.source_file}
-                  </span>
-                  <StatusBadge status={policy.status} />
-                </div>
-                <p className="mt-1 truncate text-sm text-neutral-500 dark:text-neutral-400">
-                  {policy.insurer ?? '—'} · {policy.policy_type} · {policy.chunk_count} chunks
-                </p>
-              </Link>
-              <button
-                onClick={() => handleDelete(policy.id)}
-                className="ml-4 shrink-0 rounded-lg px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
-              >
-                Delete
-              </button>
-            </li>
+        <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {filtered.map((policy) => (
+            <PolicyCard key={policy.id} policy={policy} />
           ))}
-        </ul>
-      )}
-
-      {showUpload && (
-        <UploadPolicyDialog onClose={() => setShowUpload(false)} onUploaded={refresh} />
+        </div>
       )}
     </div>
   )

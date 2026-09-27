@@ -1,5 +1,7 @@
 # Insurance Voicebot → Structured Policy App
 
+> **Status:** Phases 0–6 below are complete and describe the original FastAPI + React rewrite. Two more builds have since shipped on top of it — see [Completed since Phase 6](#completed-since-phase-6) for what they did and [Proposed next](#proposed-next) for what's not built yet. For the current, up-to-date architecture (not a plan — a reference), see `CLAUDE.md`.
+
 ## Context
 
 The project today is a single-PDF-pair RAG chatbot: `rag/ingest.py` loads two hardcoded PDFs with `PyPDFLoader` (which flattens tables — sum-insured schedules, waiting-period grids, benefit tables — into garbled inline text) and slices them with a blind `RecursiveCharacterTextSplitter(1000/200)` that ignores section boundaries. Retrieval quality suffers because chunks can separate a waiting-period label from its value, or split a table mid-row.
@@ -155,3 +157,33 @@ Auth/multi-tenancy, deployment/CI, automated test suites, OCR for scanned PDFs, 
 - Phase 4: `curl -F "file=@data/Health_Insurance.pdf" -F "policy_type=health" http://localhost:8000/policies/upload`, then poll `GET /policies/{id}` until `status == "ready"`, inspect `summary_json`.
 - Phase 5: `curl -X POST http://localhost:8000/chat -d '{"message": "...", "history": [], "policy_id": null}'`; confirm `app.py`'s voice flow still plays audio after the `tts.py` bytes-return change.
 - Phase 6: `npm run dev`, exercise the golden path in the browser — upload a PDF, watch it go processing → ready, view the summary, ask a question in chat, use the mic — per the project's UI-testing guidance in CLAUDE.md/general instructions.
+
+## Completed since Phase 6
+
+### Plan 2 — Auto-classification, Motor support, richer extraction, full "PolicyPilot" UI/UX redesign
+
+Two backend fixes (stop asking the user to pick a policy type before upload — auto-classify from the document's own content instead, since a wrong manual pick silently broke retrieval filtering — and add Motor as a real third policy type) grew into a full visual redesign once `UIUX.md` and a mockup were provided.
+
+- **Backend**: `policy_summary_chain.py` now classifies `policy_type` (`health`/`life`/`motor`/`unknown`) as part of the same structured-output call that extracts everything else, and populates one of `health_details`/`life_details`/`motor_details` plus `faqs` and normalized `sum_insured_numeric`/`policy_end_date_iso`. `POST /policies/upload` no longer takes a `policy_type` field — rows start `"unknown"` and the background job classifies them; chunks are retroactively tagged with the classified type. New `PATCH /policies/{id}` (manual override, re-tags Chroma metadata) and `GET /policies/{id}/file` (download) endpoints. New `backend/db.py:sync_columns()` idempotently `ALTER TABLE`s in the new `Policy` columns (`policy_number`, `sum_insured(_numeric)`, `policy_end_date(_iso)`) since there's no Alembic.
+- **Frontend**: full redesign per `UIUX.md` — sage/teal/cream/peach/beige palette as Tailwind `@theme` tokens, a cosmetic-only login page, a sidebar+topbar dashboard shell (`App.tsx`, `Sidebar.tsx`, `Topbar.tsx`), `HomePage` dashboard with stat cards, `PolicyListPage` with type filters and drag-and-drop upload (progress via `XMLHttpRequest`), a tabbed `PolicyDetailPage` (Overview/What's Covered/Claim Process/Cashless Hospitals/FAQs + 4 action cards + a manual type-override control), and a `FloatingAssistant` (Chat/Voice tabs) mounted on every page in place of the old standalone `/chat` route.
+- **Unrelated bug found and fixed along the way**: `gemini-2.5-flash-lite` had been deprecated by Google (404 on every call, silently failing all ingestion) — every chain swapped to `gemini-3.5-flash-lite`.
+
+### Plan 3 — Persistent chat sessions, voice auto-stop, light-theme fix
+
+- **Color/theme bug fix**: the redesign had accidentally left `dark:` Tailwind classes throughout, which followed the OS `prefers-color-scheme` and made the whole app render near-black instead of the intended sage/cream palette. All `dark:` classes removed across 19 files; `color-scheme: light` pinned explicitly. `UIUX.md` only ever specified one theme — this was a bug, not a missing dark-mode feature.
+- **Persistent Chat page** (`/chat`, new `ChatSession`/`ChatMessage` tables + `backend/routers/chat_sessions.py`): a ChatGPT-style two-pane UI (session list + active conversation), sessions created lazily on first message, titled from the first message. Clarification logic was refactored out of `routers/chat.py` into a shared `backend/services/chat_service.py:answer_question()` so both the ephemeral `/chat` endpoint and the new persistent one behave identically. The floating assistant stays deliberately ephemeral/ scoped-to-current-policy (ChatGPT-style history was judged to be a different use case than "quick question about the policy I'm looking at"), and now links to the full Chat page instead of duplicating it.
+- **Voice UX overhaul**: replaced manual tap-to-stop recording with real silence detection (`frontend/src/hooks/useVoiceRecorder.ts`, Web Audio `AnalyserNode` RMS) — recording auto-stops ~1.4s after the user stops talking (30s hard cap, manual stop still works). Both the floating assistant and the new Chat page now show the live transcript and the bot's text answer immediately during voice interactions, instead of silently switching to a text tab or only playing audio.
+
+## Proposed next
+
+Candidate follow-up plans — none of these are approved or started, this is a menu to prioritize from:
+
+1. **Backend test suite** (pytest) — there are currently zero tests. Highest-value first targets: ingestion classification, `policy_id`/`policy_type` retrieval filtering, and the clarification branch in `chat_service.answer_question`.
+2. **Frontend test suite** (vitest + React Testing Library) — also zero tests today. First targets: the upload flow, `useVoiceRecorder`'s silence-detection timing logic, and the chat-session flow (create-on-first-message, title, delete).
+3. **Recovery for stuck `"processing"` rows** — a backend restart mid-ingestion currently strands a row forever; a lightweight requeue/retry instead of manual delete-and-reupload.
+4. **LLM-generated chat session titles** — replace the naive first-60-characters truncation with a short Gemini-generated summary (one cheap extra call, only on session creation).
+5. **Hands-free voice "call mode"** — after the assistant finishes speaking, automatically resume listening (chain silence-detected turns) instead of requiring a tap to start every turn.
+6. **Real auth** — only worth doing if this stops being a single-user local app; would replace the cosmetic login and add real data isolation.
+7. **Wire up Topbar search** — currently a disabled, visual-only input; could become a real endpoint searching across policies and/or past chat sessions.
+8. **Clean up legacy pre-`policy_id` vector chunks** — a `--rebuild` + re-upload-through-the-API pass so all retrieval can rely uniformly on `policy_id` filtering instead of falling back to `policy_type`.
+9. **OCR support for scanned PDFs** — Docling's current pipeline assumes digital text; scanned/photographed policy documents aren't handled.

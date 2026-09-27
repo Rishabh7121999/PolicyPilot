@@ -1,33 +1,41 @@
 import shutil
 from pathlib import Path
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.config import UPLOADS_DIR
 from backend.db import get_db
-from backend.models import Policy
-from backend.schemas import PolicyDetail, PolicyListItem, PolicyUploadResponse
+from backend.deps import get_current_user
+from backend.models import Policy, User
+from backend.schemas import PolicyDetail, PolicyListItem, PolicyTypeUpdate, PolicyUploadResponse
 from backend.services.ingestion import run_ingestion_job
 from backend.rag.retriever import invalidate_bm25_cache
 from backend.rag.vectorstore import get_vectordb
 
 router = APIRouter(prefix="/policies", tags=["policies"])
 
-VALID_POLICY_TYPES = {"health", "life"}
+VALID_POLICY_TYPES = {"health", "life", "motor"}
 
 
 @router.get("", response_model=list[PolicyListItem])
-def list_policies(db: Session = Depends(get_db)):
-    return db.execute(select(Policy).order_by(Policy.created_at.desc())).scalars().all()
+def list_policies(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return db.execute(
+        select(Policy)
+        .where(Policy.user_id == current_user.id)
+        .order_by(Policy.created_at.desc())
+    ).scalars().all()
 
 
 @router.get("/{policy_id}", response_model=PolicyDetail)
-def get_policy(policy_id: int, db: Session = Depends(get_db)):
+def get_policy(
+    policy_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     policy = db.get(Policy, policy_id)
 
-    if policy is None:
+    if policy is None or policy.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Policy not found")
 
     return policy
@@ -37,17 +45,12 @@ def get_policy(policy_id: int, db: Session = Depends(get_db)):
 def upload_policy(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
-    policy_type: str = Form(...),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    if policy_type not in VALID_POLICY_TYPES:
-        raise HTTPException(
-            status_code=400,
-            detail=f"policy_type must be one of {sorted(VALID_POLICY_TYPES)}",
-        )
-
     policy = Policy(
-        policy_type=policy_type,
+        user_id=current_user.id,
+        policy_type="unknown",
         source_file=file.filename,
         file_path="",
         status="processing",
@@ -71,11 +74,69 @@ def upload_policy(
     return {"id": policy.id, "status": policy.status}
 
 
-@router.delete("/{policy_id}", status_code=204)
-def delete_policy(policy_id: int, db: Session = Depends(get_db)):
+@router.get("/{policy_id}/file")
+def download_policy_file(
+    policy_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     policy = db.get(Policy, policy_id)
 
-    if policy is None:
+    if policy is None or policy.user_id != current_user.id or not policy.file_path:
+        raise HTTPException(status_code=404, detail="Policy not found")
+
+    if not Path(policy.file_path).exists():
+        raise HTTPException(status_code=404, detail="Policy file not found")
+
+    return FileResponse(
+        policy.file_path,
+        filename=policy.source_file,
+        media_type="application/pdf",
+    )
+
+
+@router.patch("/{policy_id}", response_model=PolicyDetail)
+def update_policy_type(
+    policy_id: int,
+    body: PolicyTypeUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if body.policy_type not in VALID_POLICY_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"policy_type must be one of {sorted(VALID_POLICY_TYPES)}",
+        )
+
+    policy = db.get(Policy, policy_id)
+
+    if policy is None or policy.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Policy not found")
+
+    policy.policy_type = body.policy_type
+    db.commit()
+    db.refresh(policy)
+
+    vectordb = get_vectordb()
+    existing = vectordb.get(where={"policy_id": str(policy_id)})
+    ids = existing.get("ids") or []
+
+    if ids:
+        metadatas = existing.get("metadatas") or []
+        updated_metadatas = [
+            {**(metadata or {}), "policy_type": body.policy_type} for metadata in metadatas
+        ]
+        vectordb._collection.update(ids=ids, metadatas=updated_metadatas)
+        invalidate_bm25_cache()
+
+    return policy
+
+
+@router.delete("/{policy_id}", status_code=204)
+def delete_policy(
+    policy_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
+    policy = db.get(Policy, policy_id)
+
+    if policy is None or policy.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Policy not found")
 
     get_vectordb().delete(where={"policy_id": str(policy_id)})

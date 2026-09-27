@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -15,3 +16,7 @@ UPLOADS_DIR = BASE_DIR / "backend" / "uploads"
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 VITE_DEV_ORIGIN = "http://localhost:5173"
+
+SECRET_KEY = os.getenv("SECRET_KEY", "dev-insecure-secret-change-me")
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "10080"))
+JWT_ALGORITHM = "HS256"

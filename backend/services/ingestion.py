@@ -39,7 +39,6 @@ def run_ingestion_job(policy_id: int) -> None:
                     sys.executable,
                     "-m",
                     "backend.rag.ingest_worker",
-                    "--policy-type", policy.policy_type,
                     "--pdf-path", policy.file_path,
                     "--policy-id", str(policy.id),
                     "--out", out_path,
@@ -67,8 +66,14 @@ def run_ingestion_job(policy_id: int) -> None:
 
         policy.summary_json = summary
         policy.chunk_count = len(chunks)
+        policy.policy_type = summary.get("policy_type", "unknown")
         policy.insurer = summary.get("insurer")
         policy.product_name = summary.get("product_name")
+        policy.policy_number = summary.get("policy_number")
+        policy.sum_insured = summary.get("sum_insured")
+        policy.sum_insured_numeric = summary.get("sum_insured_numeric")
+        policy.policy_end_date = summary.get("policy_end_date")
+        policy.policy_end_date_iso = summary.get("policy_end_date_iso")
         policy.status = "ready"
         policy.error_message = None
 

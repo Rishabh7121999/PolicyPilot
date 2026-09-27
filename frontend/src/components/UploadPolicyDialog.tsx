@@ -1,6 +1,6 @@
-import { useState, type FormEvent } from 'react'
+import { useState, type DragEvent } from 'react'
 import { uploadPolicy } from '../api/client'
-import type { PolicyType } from '../api/types'
+import { UploadIcon } from './icons'
 
 interface UploadPolicyDialogProps {
   onClose: () => void
@@ -9,82 +9,110 @@ interface UploadPolicyDialogProps {
 
 export function UploadPolicyDialog({ onClose, onUploaded }: UploadPolicyDialogProps) {
   const [file, setFile] = useState<File | null>(null)
-  const [policyType, setPolicyType] = useState<PolicyType>('health')
+  const [dragActive, setDragActive] = useState(false)
+  const [progress, setProgress] = useState(0)
   const [submitting, setSubmitting] = useState(false)
+  const [processing, setProcessing] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault()
-    if (!file) return
-
-    setSubmitting(true)
+  async function startUpload(selected: File) {
+    setFile(selected)
     setError(null)
+    setSubmitting(true)
+    setProgress(0)
 
     try {
-      await uploadPolicy(file, policyType)
-      onUploaded()
-      onClose()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Upload failed')
-    } finally {
+      await uploadPolicy(selected, setProgress)
       setSubmitting(false)
+      setProcessing(true)
+      // Give the user a moment to see the "processing" state before closing —
+      // the actual status now lives on the policy detail/list pages, which poll.
+      setTimeout(() => {
+        onUploaded()
+      }, 900)
+    } catch (err) {
+      setSubmitting(false)
+      setError(err instanceof Error ? err.message : 'Upload failed')
     }
+  }
+
+  function handleDrop(e: DragEvent<HTMLDivElement>) {
+    e.preventDefault()
+    setDragActive(false)
+    const dropped = e.dataTransfer.files?.[0]
+    if (dropped) startUpload(dropped)
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl dark:bg-neutral-900">
-        <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
-          Upload Policy
-        </h2>
+      <div className="w-full max-w-md rounded-2xl bg-cream-50 p-6 shadow-xl">
+        <h2 className="text-lg font-semibold text-neutral-900">Upload Policy</h2>
+        <p className="mt-1 text-sm text-neutral-500">
+          We'll read the document and figure out the policy type automatically.
+        </p>
 
-        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
-              Policy Type
-            </label>
-            <select
-              value={policyType}
-              onChange={(e) => setPolicyType(e.target.value as PolicyType)}
-              className="mt-1 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
-            >
-              <option value="health">Health</option>
-              <option value="life">Life</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
-              PDF File
-            </label>
+        <div
+          onDragOver={(e) => {
+            e.preventDefault()
+            setDragActive(true)
+          }}
+          onDragLeave={() => setDragActive(false)}
+          onDrop={handleDrop}
+          className={`mt-5 flex flex-col items-center justify-center rounded-2xl border-2 border-dashed p-8 text-center transition-colors ${
+            dragActive
+              ? 'border-sage-500 bg-sage-50'
+              : 'border-beige-200'
+          }`}
+        >
+          <UploadIcon className="h-8 w-8 text-sage-600" />
+          <p className="mt-3 text-sm text-neutral-600">
+            Drag and drop your policy PDF here, or
+          </p>
+          <label className="mt-2 cursor-pointer text-sm font-medium text-sage-700 hover:underline">
+            browse to upload
             <input
               type="file"
               accept="application/pdf"
-              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-              className="mt-1 w-full text-sm text-neutral-700 file:mr-3 file:rounded-lg file:border-0 file:bg-neutral-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-neutral-700 hover:file:bg-neutral-200 dark:text-neutral-300 dark:file:bg-neutral-800 dark:file:text-neutral-300"
-              required
+              className="hidden"
+              onChange={(e) => {
+                const selected = e.target.files?.[0]
+                if (selected) startUpload(selected)
+              }}
             />
-          </div>
+          </label>
+        </div>
 
-          {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
-
-          <div className="flex justify-end gap-2 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={!file || submitting}
-              className="rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200"
-            >
-              {submitting ? 'Uploading…' : 'Upload'}
-            </button>
+        {file && (submitting || processing) && (
+          <div className="mt-4">
+            <div className="flex items-center justify-between text-xs text-neutral-500">
+              <span className="truncate">{file.name}</span>
+              <span>{submitting ? `${progress}%` : 'Processing…'}</span>
+            </div>
+            <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-beige-200">
+              <div
+                className="h-full rounded-full bg-sage-600 transition-all"
+                style={{ width: `${submitting ? progress : 100}%` }}
+              />
+            </div>
+            {processing && (
+              <p className="mt-2 text-sm text-sage-700">
+                We're reading your document — you'll see it appear as "processing" in My Policies.
+              </p>
+            )}
           </div>
-        </form>
+        )}
+
+        {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+
+        <div className="mt-6 flex justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-beige-100"
+          >
+            {processing ? 'Done' : 'Cancel'}
+          </button>
+        </div>
       </div>
     </div>
   )

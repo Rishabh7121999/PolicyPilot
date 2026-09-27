@@ -1,52 +1,57 @@
-import { useRef, useState } from 'react'
-
 interface MicButtonProps {
-  onRecorded: (blob: Blob) => void
+  recording: boolean
+  hasSpoken: boolean
+  onStart: () => void
+  onStop: () => void
   disabled?: boolean
+  // True while the assistant's spoken answer is still playing. Tapping the
+  // mic in this state interrupts playback and starts recording right away,
+  // instead of requiring a separate stop action first.
+  speaking?: boolean
+  onInterrupt?: () => void
 }
 
-export function MicButton({ onRecorded, disabled }: MicButtonProps) {
-  const [recording, setRecording] = useState(false)
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
-  const chunksRef = useRef<Blob[]>([])
-
-  async function startRecording() {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-    const recorder = new MediaRecorder(stream)
-    chunksRef.current = []
-
-    recorder.ondataavailable = (e) => {
-      if (e.data.size > 0) chunksRef.current.push(e.data)
+export function MicButton({
+  recording,
+  hasSpoken,
+  onStart,
+  onStop,
+  disabled,
+  speaking,
+  onInterrupt,
+}: MicButtonProps) {
+  function handleClick() {
+    if (recording) {
+      onStop()
+      return
     }
 
-    recorder.onstop = () => {
-      const blob = new Blob(chunksRef.current, { type: recorder.mimeType })
-      stream.getTracks().forEach((track) => track.stop())
-      onRecorded(blob)
-    }
-
-    recorder.start()
-    mediaRecorderRef.current = recorder
-    setRecording(true)
-  }
-
-  function stopRecording() {
-    mediaRecorderRef.current?.stop()
-    setRecording(false)
+    if (speaking) onInterrupt?.()
+    onStart()
   }
 
   return (
     <button
       type="button"
       disabled={disabled}
-      onClick={recording ? stopRecording : startRecording}
+      onClick={handleClick}
       className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
         recording
-          ? 'bg-red-600 text-white animate-pulse'
-          : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700'
+          ? hasSpoken
+            ? 'bg-red-600 text-white animate-pulse'
+            : 'bg-red-400 text-white'
+          : speaking
+            ? 'bg-sage-200 text-sage-800 animate-pulse'
+            : 'bg-beige-100 text-neutral-700 hover:bg-beige-200'
       }`}
-      aria-label={recording ? 'Stop recording' : 'Start recording'}
-      title={recording ? 'Stop recording' : 'Record a voice message'}
+      aria-label={recording ? 'Stop recording' : speaking ? 'Interrupt and speak' : 'Start recording'}
+      title={
+        recording
+          ? 'Listening — stops automatically after you pause, or tap to stop now'
+          : speaking
+            ? 'Tap to interrupt and speak'
+            : 'Record a voice message'
+      }
     >
       {recording ? (
         <span className="h-3 w-3 rounded-sm bg-white" />

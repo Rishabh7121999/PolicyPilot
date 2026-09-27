@@ -32,7 +32,7 @@ def _build_chunker() -> HybridChunker:
 
 def parse_and_chunk(
     pdf_path: str,
-    policy_type: str,
+    policy_type: str | None = None,
     policy_id: str | int | None = None,
 ) -> tuple[list[Document], str]:
     """Parse a PDF with Docling and chunk it along document structure.
@@ -56,10 +56,12 @@ def parse_and_chunk(
         )
 
         metadata: dict[str, str | int] = {
-            "policy_type": policy_type,
             "source_file": source_file,
             "chunk_index": chunk_index,
         }
+
+        if policy_type is not None:
+            metadata["policy_type"] = policy_type
 
         if pages:
             metadata["page"] = pages[0]

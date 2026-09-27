@@ -1,29 +1,42 @@
-import { NavLink, Outlet } from 'react-router-dom'
+import { Outlet } from 'react-router-dom'
+import { FloatingAssistant } from './components/FloatingAssistant'
+import { Sidebar } from './components/Sidebar'
+import { Topbar } from './components/Topbar'
+import { UploadPolicyDialog } from './components/UploadPolicyDialog'
+import { AppShellProvider, useAppShell } from './context/AppShellContext'
 
-const navLinkClass = ({ isActive }: { isActive: boolean }) =>
-  `rounded-lg px-3 py-1.5 text-sm font-medium ${
-    isActive
-      ? 'bg-neutral-900 text-white dark:bg-white dark:text-neutral-900'
-      : 'text-neutral-600 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800'
-  }`
+function Shell() {
+  const { uploadDialogOpen, closeUploadDialog, refreshPolicies } = useAppShell()
+
+  return (
+    <div className="flex h-screen overflow-hidden bg-beige-50 text-neutral-900">
+      <Sidebar />
+      <div className="flex h-screen flex-1 flex-col">
+        <Topbar />
+        <main className="flex-1 overflow-y-auto">
+          <Outlet />
+        </main>
+      </div>
+
+      {uploadDialogOpen && (
+        <UploadPolicyDialog
+          onClose={closeUploadDialog}
+          onUploaded={() => {
+            refreshPolicies()
+            closeUploadDialog()
+          }}
+        />
+      )}
+
+      <FloatingAssistant />
+    </div>
+  )
+}
 
 export function App() {
   return (
-    <div className="min-h-screen bg-white text-neutral-900 dark:bg-neutral-950 dark:text-neutral-100">
-      <header className="border-b border-neutral-200 dark:border-neutral-800">
-        <nav className="mx-auto flex max-w-4xl items-center gap-2 px-4 py-3">
-          <span className="mr-2 text-sm font-semibold">🎙️ Insurance Voicebot</span>
-          <NavLink to="/" end className={navLinkClass}>
-            Policies
-          </NavLink>
-          <NavLink to="/chat" className={navLinkClass}>
-            Chat
-          </NavLink>
-        </nav>
-      </header>
-      <main>
-        <Outlet />
-      </main>
-    </div>
+    <AppShellProvider>
+      <Shell />
+    </AppShellProvider>
   )
 }

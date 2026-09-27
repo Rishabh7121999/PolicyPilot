@@ -28,7 +28,6 @@ from backend.chains.policy_summary_chain import extract_policy_summary
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--policy-type", required=True)
     parser.add_argument("--pdf-path", required=True)
     parser.add_argument("--policy-id", required=True)
     parser.add_argument("--out", required=True, help="Path to write the result JSON to")
@@ -37,13 +36,16 @@ def main():
     try:
         chunks, full_text = parse_and_chunk(
             args.pdf_path,
-            policy_type=args.policy_type,
             policy_id=args.policy_id,
         )
         summary = extract_policy_summary(full_text)
 
+        for chunk in chunks:
+            chunk.metadata["policy_type"] = summary.policy_type
+
         result = {
             "ok": True,
+            "policy_type": summary.policy_type,
             "chunks": [
                 {"page_content": doc.page_content, "metadata": doc.metadata}
                 for doc in chunks

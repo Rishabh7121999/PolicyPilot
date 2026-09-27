@@ -6,7 +6,7 @@ export function SourceList({ sources }: { sources: string[] }) {
       {sources.map((source) => (
         <span
           key={source}
-          className="rounded-full border border-neutral-200 px-2.5 py-0.5 text-xs text-neutral-500 dark:border-neutral-700 dark:text-neutral-400"
+          className="rounded-full border border-neutral-200 px-2.5 py-0.5 text-xs text-neutral-500"
         >
           {source}
         </span>

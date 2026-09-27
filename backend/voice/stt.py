@@ -2,7 +2,10 @@ from faster_whisper import WhisperModel
 
 model = WhisperModel(
     "base",
-    device="cpu"
+    device="cpu",
+    # int8 quantization roughly halves CPU inference time with a negligible
+    # accuracy hit -- meaningful for keeping voice-mode turnaround snappy.
+    compute_type="int8",
 )
 
 def transcribe(audio_path):

@@ -1,191 +1,108 @@
 import time
-from concurrent.futures import ThreadPoolExecutor
 
-from backend.chains.query_rewriter import query_rewriter
-from backend.chains.policy_detector import policy_detector
 from backend.chains.insurance_chain import chain
 
 from backend.rag.retriever import retriever, get_hybrid_retriever
 
 
-REWRITE_TERMS = [
-    "acl",
-    "waiting period",
-    "copay",
-    "co-pay",
-    "deductible",
-    "critical illness",
-    "pre existing",
-    "pre-existing"
-]
+def _retrieve(query: str, policy_id: int | None, policy_type: str | None):
+    if policy_id is not None:
+        return get_hybrid_retriever(
+            metadata_filter={"policy_id": str(policy_id)}
+        ).invoke(query)
+
+    if policy_type in ["health", "life", "motor"]:
+        return get_hybrid_retriever(
+            metadata_filter={"policy_type": policy_type}
+        ).invoke(query)
+
+    return retriever.invoke(query)
 
 
-def detect_policy(query):
-    return policy_detector.invoke(
-        {"question": query}
-    ).strip().lower()
+def _build_context_and_sources(docs) -> tuple[str, list[str]]:
+    context_parts = []
+    sources = []
+    seen = set()
+
+    for doc in docs:
+        policy_type = doc.metadata.get("policy_type") or "unknown"
+        source_file = doc.metadata.get("source_file")
+        page = doc.metadata.get("page")
+
+        context_parts.append(
+            f"[{policy_type} | {source_file}, p.{page}]\n{doc.page_content}"
+        )
+
+        source = f"{source_file} (Page {page})"
+        if source not in seen:
+            seen.add(source)
+            sources.append(source)
+
+    return "\n\n".join(context_parts), sources
 
 
-def rewrite_query(query):
-    return query_rewriter.invoke(
-        {"question": query}
-    )
+def ask_insurance_bot_stream(
+    query: str,
+    chat_history: list[str],
+    policy_id: int | None = None,
+    policy_type: str | None = None,
+    standalone_query: str | None = None,
+    voice: bool = False,
+) -> dict:
+    """Retrieval, then streaming generation.
 
+    Query rewriting and policy resolution happen upstream, in
+    `backend.services.chat_service`, before this is called -- either via
+    `backend.chains.policy_resolver` (unscoped chat) or
+    `backend.chains.query_rewriter` (already policy-scoped chat).
 
-def ask_insurance_bot(query, chat_history, policy_id=None):
+    Returns immediately with the retrieval results (`sources`, `policy_type`,
+    `rewritten_query`, `timings`) plus a `token_stream` generator that yields
+    the answer text incrementally as the LLM produces it. `timings["llm_generation"]`
+    is only populated once `token_stream` has been fully consumed.
+    """
 
     timings = {}
 
-    query_lower = query.lower()
-
-    needs_rewrite = any(
-        term in query_lower
-        for term in REWRITE_TERMS
-    )
-
-    # ---------------------------------
-    # Policy Detection + Rewrite
-    # ---------------------------------
-
-    start = time.time()
-
-    with ThreadPoolExecutor(max_workers=2) as executor:
-
-        policy_future = executor.submit(
-            detect_policy,
-            query
-        )
-
-        rewrite_future = None
-
-        if needs_rewrite:
-
-            rewrite_future = executor.submit(
-                rewrite_query,
-                query
-            )
-
-        policy_type = policy_future.result()
-
-        if rewrite_future:
-
-            rewritten_query = rewrite_future.result()
-
-            if len(rewritten_query) > 300:
-                rewritten_query = query
-
-        else:
-
-            rewritten_query = query
-
-    timings["policy_detection_and_query_rewriting"] = round(
-        time.time() - start,
-        2
-    )
-
-    # ---------------------------------
-    # Retrieval
-    # ---------------------------------
+    rewritten_query = standalone_query or query
 
     start = time.time()
 
     try:
-
-        if policy_id is not None:
-
-            docs = get_hybrid_retriever(
-                metadata_filter={"policy_id": str(policy_id)}
-            ).invoke(rewritten_query)
-
-        elif policy_type in ["health", "life"]:
-
-            docs = get_hybrid_retriever(
-                metadata_filter={"policy_type": policy_type}
-            ).invoke(rewritten_query)
-
-        else:
-
-            docs = retriever.invoke(
-                rewritten_query
-            )
-
+        docs = _retrieve(rewritten_query, policy_id, policy_type)
     except Exception as e:
-
         print(f"Retriever Error: {e}")
         docs = []
 
-    timings["retrieval"] = round(
-        time.time() - start,
-        2
+    timings["retrieval"] = round(time.time() - start, 2)
+
+    context, sources = _build_context_and_sources(docs)
+
+    style_instruction = (
+        "Answer in 2-3 short spoken sentences. No markdown, no bullet lists, no tables. "
+        "If the full details are long (e.g. a list of exclusions or hospital names), give the "
+        "headline answer and say the complete details are shown on screen."
+        if voice
+        else ""
     )
 
-    # ---------------------------------
-    # Context
-    # ---------------------------------
+    def token_stream():
+        start_gen = time.time()
 
-    context_parts = []
+        for token in chain.stream({
+            "history": "\n".join(chat_history),
+            "context": context,
+            "question": query,
+            "style_instruction": style_instruction,
+        }):
+            yield token
 
-    for doc in docs:
-
-        context_parts.append(
-            f"""
-Policy Type:
-{doc.metadata.get('policy_type')}
-
-Source:
-{doc.metadata.get('source_file')}
-
-Page:
-{doc.metadata.get('page')}
-
-Content:
-{doc.page_content}
-"""
-        )
-
-    context = "\n\n".join(context_parts)
-
-    # ---------------------------------
-    # Sources
-    # ---------------------------------
-
-    sources = []
-
-    seen = set()
-
-    for doc in docs:
-
-        source = (
-            f"{doc.metadata.get('source_file')} "
-            f"(Page {doc.metadata.get('page')})"
-        )
-
-        if source not in seen:
-
-            seen.add(source)
-            sources.append(source)
-
-    # ---------------------------------
-    # LLM
-    # ---------------------------------
-
-    start = time.time()
-
-    answer = chain.invoke({
-        "history": "\n".join(chat_history),
-        "context": context,
-        "question": query
-    })
-
-    timings["llm_generation"] = round(
-        time.time() - start,
-        2
-    )
+        timings["llm_generation"] = round(time.time() - start_gen, 2)
 
     return {
-        "answer": answer,
         "sources": sources,
         "policy_type": policy_type,
         "rewritten_query": rewritten_query,
-        "timings": timings
+        "timings": timings,
+        "token_stream": token_stream(),
     }
