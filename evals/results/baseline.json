@@ -1,0 +1,512 @@
+[
+  {
+    "id": "h01",
+    "hit": true,
+    "retrieval_s": 2.274,
+    "pages": [
+      36,
+      13,
+      36,
+      36,
+      38,
+      35,
+      24,
+      36
+    ],
+    "answer_ok": true,
+    "answer": "The initial waiting period for all illnesses is **30 days** from the first policy commencement date. This waiting period does not apply to claims arising due to an accident or if the insured has continuous coverage for more than twelve months."
+  },
+  {
+    "id": "h02",
+    "hit": true,
+    "retrieval_s": 1.559,
+    "pages": [
+      35,
+      36,
+      23,
+      43,
+      13,
+      18,
+      35,
+      24
+    ],
+    "answer_ok": true,
+    "answer": "Expenses related to the treatment of a pre-existing disease are covered after the expiry of **36 months** of continuous coverage from the date of inception of the first policy."
+  },
+  {
+    "id": "h03",
+    "hit": true,
+    "retrieval_s": 1.484,
+    "pages": [
+      36,
+      13,
+      36,
+      38,
+      36,
+      24,
+      36,
+      21
+    ],
+    "answer_ok": true,
+    "answer": "Yes, there is a **24-month** waiting period for hernia surgery (of any site or type) from the date of inception of the first policy. This exclusion does not apply to claims arising due to an accident."
+  },
+  {
+    "id": "h04",
+    "hit": true,
+    "retrieval_s": 1.283,
+    "pages": [
+      4,
+      14,
+      24,
+      27,
+      26,
+      34,
+      48,
+      33
+    ],
+    "answer_ok": true,
+    "answer": "The policy pays up to **INR 2,50,000** per hospitalization for air ambulance services, provided it is for an emergency and the hospitalization claim is paid."
+  },
+  {
+    "id": "h05",
+    "hit": true,
+    "retrieval_s": 1.731,
+    "pages": [
+      4,
+      26,
+      33,
+      23,
+      25,
+      35,
+      24,
+      26
+    ],
+    "answer_ok": true,
+    "answer": "The policy covers medical expenses incurred for **60 days** before the date of admission and **180 days** after the date of discharge, provided these expenses are related to the condition for which the hospitalization claim is paid."
+  },
+  {
+    "id": "h06",
+    "hit": true,
+    "retrieval_s": 1.282,
+    "pages": [
+      35,
+      21,
+      43,
+      14,
+      27,
+      42,
+      41,
+      33
+    ],
+    "answer_ok": true,
+    "answer": "Based on your policy documents, co-payment is not opted for under your plan. Therefore, you do not have to pay a co-payment on claims."
+  },
+  {
+    "id": "h07",
+    "hit": true,
+    "retrieval_s": 1.294,
+    "pages": [
+      39,
+      39,
+      17,
+      16,
+      18,
+      13,
+      38,
+      30
+    ],
+    "answer_ok": true,
+    "answer": "The free look period is a **30-day** window from the date you receive your policy document, during which you can review the terms and conditions. If you are not satisfied, you have the option to cancel the policy and receive a refund of the premium paid, subject to a deduction for proportionate risk premium, medical examination expenses, and stamp duty charges, provided no claim has been made."
+  },
+  {
+    "id": "h08",
+    "hit": true,
+    "retrieval_s": 1.16,
+    "pages": [
+      40,
+      30,
+      39,
+      39,
+      21,
+      17,
+      24,
+      38
+    ],
+    "answer_ok": true,
+    "answer": "The grace period for renewing the policy is **30 days** for all cases, except for monthly premium payment modes, where the grace period is **15 days**."
+  },
+  {
+    "id": "h09",
+    "hit": true,
+    "retrieval_s": 1.158,
+    "pages": [
+      4,
+      26,
+      14,
+      35,
+      35,
+      35,
+      10,
+      34
+    ],
+    "answer_ok": true,
+    "answer": "The annual health check-up is covered up to a maximum of **INR 5,000** per policy."
+  },
+  {
+    "id": "h10",
+    "hit": true,
+    "retrieval_s": 1.271,
+    "pages": [
+      26,
+      10,
+      27,
+      48,
+      24,
+      45,
+      35,
+      38
+    ],
+    "answer_ok": true,
+    "answer": "Yes, organ donor expenses are covered. The policy pays for the hospitalization expenses of a donor for harvesting an organ when your hospitalization claim is paid, and it also covers expenses for harvesting an organ if you are the donor."
+  },
+  {
+    "id": "h11",
+    "hit": true,
+    "retrieval_s": 1.224,
+    "pages": [
+      34,
+      30,
+      34,
+      30,
+      24,
+      11,
+      35,
+      3
+    ],
+    "answer_ok": true,
+    "answer": "The **Booster+** benefit allows you to carry forward unutilized Sum Insured for a maximum of 3 times your Base Sum Insured. \n\nKey details regarding how it functions include:\n\n*   **Sequence of Utilization:** It is used after the Base Sum Insured is exhausted.\n*   **Impact of Base Sum Insured Changes:** If you reduce your Base Sum Insured, the Booster+ Sum Insured will be proportionately reduced. If you increase your Base Sum Insured, the accumulated Booster+ Sum Insured continues to grow (up to the maximum limit of 3, 5, or 10 times your Base Sum Insured, depending on your specific plan).\n*   **Floater Plans:** If a floater plan is split into multiple policies, the Booster+ Sum Insured is carried forward to the new policies, provided the Base Sum Insured is not reduced. If an individual policy is converted into a floater plan, the least of the individual members' Booster+ Sum Insured is carried forward.\n*   **Safeguard Benefits:** Under the **Safeguard** benefit, Booster+ is not impacted if your total claim in a policy year is up to **INR 50,000**. Under **Safeguard+**, it is not impacted if the total claim is up to **INR 1,00,000**."
+  },
+  {
+    "id": "h12",
+    "hit": true,
+    "retrieval_s": 1.13,
+    "pages": [
+      25,
+      20,
+      4,
+      20,
+      33,
+      26,
+      20,
+      22
+    ],
+    "answer_ok": true,
+    "answer": "The minimum hospitalization duration for AYUSH treatment is 24 hours in an AYUSH Hospital."
+  },
+  {
+    "id": "t01",
+    "hit": true,
+    "retrieval_s": 1.344,
+    "pages": [
+      61,
+      45,
+      23,
+      17,
+      59,
+      54,
+      33,
+      35
+    ],
+    "answer_ok": false,
+    "answer": "The deductible for your policy is specified in your Policy Schedule. According to the policy documents, the annual aggregate deductible for the Super Top-up plan ranges from **1 Lac to 10 Lac** in multiples of 1 Lac."
+  },
+  {
+    "id": "t02",
+    "hit": false,
+    "retrieval_s": 1.068,
+    "pages": [
+      45,
+      29,
+      58,
+      28,
+      59,
+      63,
+      61,
+      65
+    ],
+    "answer_ok": true,
+    "answer": "Your eligibility is limited to a **Single Private Room**, which is defined as an air-conditioned room with an attached toilet that is the most basic and economical single-room accommodation available in the hospital."
+  },
+  {
+    "id": "t03",
+    "hit": true,
+    "retrieval_s": 1.297,
+    "pages": [
+      32,
+      64,
+      61,
+      32,
+      21,
+      21,
+      21,
+      21
+    ],
+    "answer_ok": true,
+    "answer": "The policy covers emergency road ambulance services up to **INR 1,500** per hospitalization."
+  },
+  {
+    "id": "t04",
+    "hit": true,
+    "retrieval_s": 1.108,
+    "pages": [
+      33,
+      61,
+      34,
+      11,
+      16,
+      34,
+      36,
+      30
+    ],
+    "answer_ok": true,
+    "answer": "The limit for mental illness treatment is **Rs. 50,000** or **10% of the Base Sum Insured**, whichever is lower. This sub-limit applies on a cumulative basis to the specific disorders listed in your policy, including severe depression, schizophrenia, bipolar disorder, post-traumatic stress disorder, and generalized anxiety disorder."
+  },
+  {
+    "id": "t05",
+    "hit": true,
+    "retrieval_s": 1.068,
+    "pages": [
+      36,
+      30,
+      34,
+      66,
+      47,
+      39,
+      15,
+      59
+    ],
+    "answer_ok": true,
+    "answer": "The sub-limit for robotic surgeries is **Rs. 2.5 Lac**."
+  },
+  {
+    "id": "t06",
+    "hit": true,
+    "retrieval_s": 1.143,
+    "pages": [
+      30,
+      35,
+      36,
+      30,
+      30,
+      16,
+      26,
+      61
+    ],
+    "answer_ok": true,
+    "answer": "The policy covers post-hospitalization medical expenses for up to **90 days** immediately following the insured person's discharge from the hospital."
+  },
+  {
+    "id": "t07",
+    "hit": true,
+    "retrieval_s": 1.178,
+    "pages": [
+      16,
+      44,
+      46,
+      44,
+      44,
+      40,
+      59,
+      58
+    ],
+    "answer_ok": true,
+    "answer": "The waiting periods for the Critical Illness cover are as follows:\n\n*   **Initial waiting period:** 90 days from the first policy commencement date.\n*   **Pre-existing diseases waiting period:** 36 months of continuous coverage.\n\nPlease note that if you enhance your Sum Insured, these waiting periods apply afresh to the extent of the increase."
+  },
+  {
+    "id": "t08",
+    "hit": true,
+    "retrieval_s": 1.059,
+    "pages": [
+      50,
+      19,
+      52,
+      23,
+      14,
+      39,
+      23,
+      29
+    ],
+    "answer_ok": true,
+    "answer": "The free look period is **30 days** from the date of receipt of the policy document. This period allows you to review the terms and conditions and provides the option to cancel the policy if you are not satisfied, provided no claim has been made."
+  },
+  {
+    "id": "l01",
+    "hit": true,
+    "retrieval_s": 1.174,
+    "pages": [
+      10,
+      24,
+      10,
+      10,
+      8,
+      21,
+      15,
+      9
+    ],
+    "answer_ok": true,
+    "answer": "If the Life Assured commits suicide within 12 months from the date of commencement of risk, the company will refund the higher of 80% of the total premiums paid or the unexpired risk premium value as of the date of death. The policy will then terminate, and all rights, benefits, and interests will be extinguished."
+  },
+  {
+    "id": "l02",
+    "hit": true,
+    "retrieval_s": 0.981,
+    "pages": [
+      9,
+      9,
+      4,
+      24,
+      10,
+      10,
+      9,
+      3
+    ],
+    "answer_ok": true,
+    "answer": "The grace period for monthly premium payments is **15 days**."
+  },
+  {
+    "id": "l03",
+    "hit": true,
+    "retrieval_s": 1.258,
+    "pages": [
+      10,
+      24,
+      10,
+      25,
+      9,
+      13,
+      17,
+      17
+    ],
+    "answer_ok": true,
+    "answer": "You have a period of five consecutive complete years from the due date of the first unpaid premium to revive a lapsed policy."
+  },
+  {
+    "id": "l04",
+    "hit": true,
+    "retrieval_s": 1.039,
+    "pages": [
+      4,
+      8,
+      3,
+      4,
+      10,
+      3,
+      24,
+      8
+    ],
+    "answer_ok": true,
+    "answer": "Under this policy, a terminal illness is defined as a medical condition that is highly likely to lead to death within 6 months. This condition must be certified by two independent medical practitioners who specialize in the treatment of such illness and are registered with the Indian Medical Association."
+  },
+  {
+    "id": "l05",
+    "hit": true,
+    "retrieval_s": 1.063,
+    "pages": [
+      9,
+      24,
+      8,
+      17,
+      3,
+      13,
+      9,
+      17
+    ],
+    "answer_ok": true,
+    "answer": "The free look period for this life policy is **30 days** from the date of receipt of the policy document."
+  },
+  {
+    "id": "m01",
+    "hit": true,
+    "retrieval_s": 0.452,
+    "pages": [
+      3,
+      4,
+      1,
+      3,
+      2,
+      4,
+      3,
+      3
+    ],
+    "answer_ok": true,
+    "answer": "The Insured Declared Value (IDV) of your bike is **1,65,608.00**."
+  },
+  {
+    "id": "m02",
+    "hit": true,
+    "retrieval_s": 0.493,
+    "pages": [
+      3,
+      4,
+      2,
+      1,
+      1,
+      3,
+      4,
+      3
+    ],
+    "answer_ok": true,
+    "answer": "You currently have a **25%** No Claim Bonus."
+  },
+  {
+    "id": "m03",
+    "hit": true,
+    "retrieval_s": 0.462,
+    "pages": [
+      3,
+      3,
+      3,
+      4,
+      4,
+      2,
+      1,
+      4
+    ],
+    "answer_ok": true,
+    "answer": "The compulsory deductible for this policy is **\u20b9100.00**."
+  },
+  {
+    "id": "m04",
+    "hit": true,
+    "retrieval_s": 0.497,
+    "pages": [
+      3,
+      3,
+      1,
+      4,
+      2,
+      4,
+      3,
+      3
+    ],
+    "answer_ok": true,
+    "answer": "No, Zero Depreciation coverage does not cover consumables unless they are opted for as a separate add-on."
+  },
+  {
+    "id": "m05",
+    "hit": true,
+    "retrieval_s": 0.692,
+    "pages": [
+      4,
+      2,
+      3,
+      3,
+      1,
+      3,
+      4,
+      1
+    ],
+    "answer_ok": true,
+    "answer": "In the event of a total theft of the vehicle, the claim is settled at the invoice price (the amount paid by the insured at the time of purchase, excluding any subsidy) or the Insured Declared Value (IDV), whichever is lower. This is subject to the terms and conditions of the policy and the admissibility of the claim."
+  }
+]

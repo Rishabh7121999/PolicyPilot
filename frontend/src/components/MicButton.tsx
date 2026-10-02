@@ -9,6 +9,7 @@ interface MicButtonProps {
   // instead of requiring a separate stop action first.
   speaking?: boolean
   onInterrupt?: () => void
+  large?: boolean
 }
 
 export function MicButton({
@@ -19,6 +20,7 @@ export function MicButton({
   disabled,
   speaking,
   onInterrupt,
+  large,
 }: MicButtonProps) {
   function handleClick() {
     if (recording) {
@@ -35,7 +37,7 @@ export function MicButton({
       type="button"
       disabled={disabled}
       onClick={handleClick}
-      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+      className={`flex ${large ? 'h-12 w-12' : 'h-10 w-10'} shrink-0 items-center justify-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
         recording
           ? hasSpoken
             ? 'bg-red-600 text-white animate-pulse'

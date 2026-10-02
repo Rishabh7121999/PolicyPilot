@@ -29,7 +29,7 @@ export function ActionCard({ icon, tint, title, description, cta, onClick }: Act
     <button
       type="button"
       onClick={onClick}
-      className={`flex flex-col items-start rounded-2xl border border-beige-200 p-5 text-left transition-shadow hover:shadow-md ${TINTS[tint]}`}
+      className={`flex flex-col items-start rounded-2xl border border-beige-200 p-5 text-left transition-all duration-150 ease-out hover:-translate-y-0.5 hover:shadow-md active:scale-[0.98] ${TINTS[tint]}`}
     >
       <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${ICON_TINTS[tint]}`}>{icon}</div>
       <p className="mt-3 text-sm font-semibold text-neutral-900">{title}</p>

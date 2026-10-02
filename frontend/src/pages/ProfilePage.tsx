@@ -3,14 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { changePassword, updateProfile } from '../api/client'
 import { UserIcon } from '../components/icons'
 import { useAuth } from '../context/AuthContext'
-
-function getInitials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean)
-  return parts
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase())
-    .join('')
-}
+import { getInitials } from '../lib/format'
 
 export function ProfilePage() {
   const { user, refreshUser, logout } = useAuth()
@@ -36,6 +29,16 @@ export function ProfilePage() {
     setEmail(user.email)
     setPhone(user.phone ?? '')
   }, [user])
+
+  // Success confirmations fade out on their own rather than lingering.
+  useEffect(() => {
+    if (!profileSuccess && !passwordSuccess) return
+    const t = setTimeout(() => {
+      setProfileSuccess(false)
+      setPasswordSuccess(false)
+    }, 3000)
+    return () => clearTimeout(t)
+  }, [profileSuccess, passwordSuccess])
 
   if (!user) return null
 
@@ -96,12 +99,12 @@ export function ProfilePage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl px-6 py-8">
-      <h1 className="text-xl font-semibold text-neutral-900">Profile</h1>
+    <div className="mx-auto max-w-2xl px-4 py-6 sm:px-6 sm:py-8">
+      <h1 className="text-2xl font-semibold text-neutral-900">Profile</h1>
 
       <div className="mt-6 flex items-center gap-4 rounded-2xl border border-beige-200 bg-white p-5">
         <div className="flex h-14 w-14 items-center justify-center rounded-full bg-sage-600 text-white">
-          {user.name ? (
+          {getInitials(user.name) ? (
             <span className="text-lg font-semibold">{getInitials(user.name)}</span>
           ) : (
             <UserIcon className="h-7 w-7" />
@@ -117,38 +120,50 @@ export function ProfilePage() {
         <h2 className="text-sm font-semibold text-neutral-900">Account details</h2>
 
         <div>
-          <label className="block text-sm font-medium text-neutral-700">Name</label>
+          <label htmlFor="profile-name" className="block text-sm font-medium text-neutral-700">
+            Name
+          </label>
           <input
+            id="profile-name"
+            autoComplete="name"
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="mt-1 w-full rounded-xl border border-beige-200 bg-white px-3.5 py-2.5 text-sm text-neutral-900 outline-none focus:border-sage-400"
+            className="mt-1 w-full rounded-xl border border-beige-200 bg-white px-3.5 py-2.5 text-sm text-neutral-900 outline-none focus:border-sage-400 focus:ring-2 focus:ring-sage-200"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-neutral-700">Email</label>
+          <label htmlFor="profile-email" className="block text-sm font-medium text-neutral-700">
+            Email
+          </label>
           <input
+            id="profile-email"
+            autoComplete="email"
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="mt-1 w-full rounded-xl border border-beige-200 bg-white px-3.5 py-2.5 text-sm text-neutral-900 outline-none focus:border-sage-400"
+            className="mt-1 w-full rounded-xl border border-beige-200 bg-white px-3.5 py-2.5 text-sm text-neutral-900 outline-none focus:border-sage-400 focus:ring-2 focus:ring-sage-200"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-neutral-700">Phone</label>
+          <label htmlFor="profile-phone" className="block text-sm font-medium text-neutral-700">
+            Phone
+          </label>
           <input
+            id="profile-phone"
+            autoComplete="tel"
             type="tel"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             placeholder="Optional"
-            className="mt-1 w-full rounded-xl border border-beige-200 bg-white px-3.5 py-2.5 text-sm text-neutral-900 outline-none focus:border-sage-400"
+            className="mt-1 w-full rounded-xl border border-beige-200 bg-white px-3.5 py-2.5 text-sm text-neutral-900 outline-none focus:border-sage-400 focus:ring-2 focus:ring-sage-200"
           />
         </div>
 
-        {profileError && <p className="text-sm text-red-600">{profileError}</p>}
-        {profileSuccess && !profileError && <p className="text-sm text-sage-700">Saved.</p>}
+        {profileError && <p role="alert" className="text-sm text-red-600">{profileError}</p>}
+        {profileSuccess && !profileError && <p role="status" className="text-sm text-sage-700">Saved.</p>}
 
         <button
           type="submit"
@@ -163,41 +178,53 @@ export function ProfilePage() {
         <h2 className="text-sm font-semibold text-neutral-900">Change password</h2>
 
         <div>
-          <label className="block text-sm font-medium text-neutral-700">Current password</label>
+          <label htmlFor="current-password" className="block text-sm font-medium text-neutral-700">
+            Current password
+          </label>
           <input
+            id="current-password"
+            autoComplete="current-password"
             type="password"
             required
             value={currentPassword}
             onChange={(e) => setCurrentPassword(e.target.value)}
-            className="mt-1 w-full rounded-xl border border-beige-200 bg-white px-3.5 py-2.5 text-sm text-neutral-900 outline-none focus:border-sage-400"
+            className="mt-1 w-full rounded-xl border border-beige-200 bg-white px-3.5 py-2.5 text-sm text-neutral-900 outline-none focus:border-sage-400 focus:ring-2 focus:ring-sage-200"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-neutral-700">New password</label>
+          <label htmlFor="new-password" className="block text-sm font-medium text-neutral-700">
+            New password
+          </label>
           <input
+            id="new-password"
+            autoComplete="new-password"
             type="password"
             required
             minLength={6}
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
-            className="mt-1 w-full rounded-xl border border-beige-200 bg-white px-3.5 py-2.5 text-sm text-neutral-900 outline-none focus:border-sage-400"
+            className="mt-1 w-full rounded-xl border border-beige-200 bg-white px-3.5 py-2.5 text-sm text-neutral-900 outline-none focus:border-sage-400 focus:ring-2 focus:ring-sage-200"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-neutral-700">Confirm new password</label>
+          <label htmlFor="confirm-password" className="block text-sm font-medium text-neutral-700">
+            Confirm new password
+          </label>
           <input
+            id="confirm-password"
+            autoComplete="new-password"
             type="password"
             required
             value={confirmNewPassword}
             onChange={(e) => setConfirmNewPassword(e.target.value)}
-            className="mt-1 w-full rounded-xl border border-beige-200 bg-white px-3.5 py-2.5 text-sm text-neutral-900 outline-none focus:border-sage-400"
+            className="mt-1 w-full rounded-xl border border-beige-200 bg-white px-3.5 py-2.5 text-sm text-neutral-900 outline-none focus:border-sage-400 focus:ring-2 focus:ring-sage-200"
           />
         </div>
 
-        {passwordError && <p className="text-sm text-red-600">{passwordError}</p>}
-        {passwordSuccess && !passwordError && <p className="text-sm text-sage-700">Password updated.</p>}
+        {passwordError && <p role="alert" className="text-sm text-red-600">{passwordError}</p>}
+        {passwordSuccess && !passwordError && <p role="status" className="text-sm text-sage-700">Password updated.</p>}
 
         <button
           type="submit"
@@ -214,7 +241,7 @@ export function ProfilePage() {
           onClick={handleLogout}
           className="rounded-xl border border-beige-200 px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50"
         >
-          Log Out
+          Log out
         </button>
       </div>
     </div>

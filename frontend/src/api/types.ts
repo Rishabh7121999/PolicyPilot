@@ -138,7 +138,7 @@ export interface ChatStreamDoneEvent {
   type: 'done'
   answer: string
   sources: string[]
-  timings: Record<string, number> | null
+  timings: Record<string, number | boolean> | null
   resolved_policy: ClarificationOption | null
   clarification_options: ClarificationOption[] | null
   needs_clarification: boolean

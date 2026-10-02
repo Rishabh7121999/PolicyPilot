@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 from docling.datamodel.base_models import InputFormat
@@ -10,15 +11,44 @@ from docling.document_converter import DocumentConverter, PdfFormatOption
 from docling_core.transforms.chunker.hybrid_chunker import HybridChunker
 from docling_core.transforms.chunker.tokenizer.huggingface import HuggingFaceTokenizer
 from langchain_core.documents import Document
+from pypdf import PdfReader
 
-from backend.rag.vectorstore import EMBEDDING_MODEL_NAME
+# Chunks are sized with the embedding model's own tokenizer (see
+# backend/rag/vectorstore.py), and capped at that model's 512-token input
+# limit so no chunk is silently truncated when embedded.
+CHUNK_TOKENIZER = "BAAI/bge-small-en-v1.5"
+CHUNK_MAX_TOKENS = 512
+
+# A page with less extractable text than this is treated as scanned.
+MIN_TEXT_CHARS_PER_PAGE = 50
+
+logger = logging.getLogger(__name__)
 
 
-def _build_converter() -> DocumentConverter:
+def _needs_ocr(pdf_path: str) -> bool:
+    """True if any page lacks a usable text layer (a scan or photo).
+
+    Digital PDFs have their text extracted directly from the text layer, so
+    OCR there only re-reads logos and stamps -- slow, and adds noise.
+    """
+    reader = PdfReader(pdf_path)
+
+    return any(
+        len((page.extract_text() or "").strip()) < MIN_TEXT_CHARS_PER_PAGE
+        for page in reader.pages
+    )
+
+
+def _build_converter(ocr: bool) -> DocumentConverter:
     # Docling's layout/table models crash under MPS (float64 unsupported on
     # Apple Silicon GPUs), so force CPU inference.
     pipeline_options = PdfPipelineOptions()
     pipeline_options.accelerator_options = AcceleratorOptions(device=AcceleratorDevice.CPU)
+    pipeline_options.do_table_structure = True
+    pipeline_options.do_ocr = ocr
+
+    if ocr:
+        pipeline_options.ocr_options.force_full_page_ocr = True
 
     return DocumentConverter(
         format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)}
@@ -26,7 +56,10 @@ def _build_converter() -> DocumentConverter:
 
 
 def _build_chunker() -> HybridChunker:
-    tokenizer = HuggingFaceTokenizer.from_pretrained(model_name=EMBEDDING_MODEL_NAME)
+    tokenizer = HuggingFaceTokenizer.from_pretrained(
+        model_name=CHUNK_TOKENIZER,
+        max_tokens=CHUNK_MAX_TOKENS,
+    )
     return HybridChunker(tokenizer=tokenizer)
 
 
@@ -41,7 +74,10 @@ def parse_and_chunk(
     vector store; full_text is the whole document as markdown (tables intact),
     for the structured-extraction chain.
     """
-    converter = _build_converter()
+    ocr = _needs_ocr(pdf_path)
+    logger.info("Parsing %s (ocr=%s)", Path(pdf_path).name, ocr)
+
+    converter = _build_converter(ocr)
     chunker = _build_chunker()
 
     result = converter.convert(pdf_path)

@@ -17,3 +17,11 @@ export function daysUntil(isoDate: string | null): number | null {
   const diffMs = target.setHours(0, 0, 0, 0) - now.setHours(0, 0, 0, 0)
   return Math.round(diffMs / (1000 * 60 * 60 * 24))
 }
+
+export function getInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  return parts
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase())
+    .join('')
+}

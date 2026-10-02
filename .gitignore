@@ -56,3 +56,6 @@ temp.wav
 frontend/node_modules/
 frontend/dist/
 *.tsbuildinfo
+
+# Downloaded embedding model (fastembed)
+.cache/

@@ -1,0 +1,30 @@
+{"id": "h01", "policy_id": 15, "question": "What is the initial waiting period for illnesses?", "expected_answer_contains": ["30 days", "30-day"], "expected_pages": [11, 13, 36, 37]}
+{"id": "h02", "policy_id": 15, "question": "After how long are pre-existing diseases covered?", "expected_answer_contains": ["36 months", "3 years", "36-month"], "expected_pages": [13, 23, 35]}
+{"id": "h03", "policy_id": 15, "question": "Is there a waiting period for hernia surgery?", "expected_answer_contains": ["24 months", "2 years", "24-month", "24 month"], "expected_pages": [13, 36]}
+{"id": "h04", "policy_id": 15, "question": "How much does the policy pay for an air ambulance?", "expected_answer_contains": ["2,50,000", "2.5 lakh", "2.5l", "250000"], "expected_pages": [4, 10, 14, 25]}
+{"id": "h05", "policy_id": 15, "question": "How many days of pre and post hospitalization expenses are covered?", "expected_answer_contains": ["180 days"], "expected_pages": [10, 26]}
+{"id": "h06", "policy_id": 15, "question": "Do I have to pay any co-payment on claims?", "expected_answer_contains": ["not opted", "no co-pay", "does not have a co-pay", "no copay"], "expected_pages": [14, 35]}
+{"id": "h07", "policy_id": 15, "question": "What is the free look period?", "expected_answer_contains": ["30 days", "thirty days", "30-day", "30 day"], "expected_pages": [17, 39]}
+{"id": "h08", "policy_id": 15, "question": "How long is the grace period for renewing the policy?", "expected_answer_contains": ["30 days", "thirty days", "30-day"], "expected_pages": [21, 40]}
+{"id": "h09", "policy_id": 15, "question": "Up to what amount is the annual health check-up covered?", "expected_answer_contains": ["5,000", "5000"], "expected_pages": [4, 10, 14, 26]}
+{"id": "h10", "policy_id": 15, "question": "Are organ donor expenses covered?", "expected_answer_contains": ["sum insured", "are covered"], "expected_pages": [4, 10, 26]}
+{"id": "h11", "policy_id": 15, "question": "How does the Booster+ benefit work?", "expected_answer_contains": ["carry forward", "carried forward", "unutilized", "unutilised"], "expected_pages": [11, 30]}
+{"id": "h12", "policy_id": 15, "question": "What is the minimum hospitalization duration for AYUSH treatment?", "expected_answer_contains": ["24 hours"], "expected_pages": [10, 25]}
+{"id": "t01", "policy_id": 12, "question": "What is the deductible on my top-up policy?", "expected_answer_contains": ["10,00,000", "1000000", "10 lakh", "10l"], "expected_pages": [3, 10, 17]}
+{"id": "t02", "policy_id": 12, "question": "What room category am I eligible for?", "expected_answer_contains": ["single private room"], "expected_pages": [4, 16]}
+{"id": "t03", "policy_id": 12, "question": "How much is covered for emergency road ambulance?", "expected_answer_contains": ["1,500", "1500"], "expected_pages": [10, 16, 32]}
+{"id": "t04", "policy_id": 12, "question": "What is the limit for mental illness treatment?", "expected_answer_contains": ["50,000", "50000", "10%"], "expected_pages": [16, 33, 34]}
+{"id": "t05", "policy_id": 12, "question": "What is the sub-limit for robotic surgery?", "expected_answer_contains": ["2.5l", "2.5 lakh", "2,50,000", "250000", "2.5 lac"], "expected_pages": [16, 36]}
+{"id": "t06", "policy_id": 12, "question": "How many days of post-hospitalization expenses are covered?", "expected_answer_contains": ["90 days", "90-day"], "expected_pages": [16, 31]}
+{"id": "t07", "policy_id": 12, "question": "What is the waiting period for critical illness cover?", "expected_answer_contains": ["90 days", "90-day"], "expected_pages": [16]}
+{"id": "t08", "policy_id": 12, "question": "What is the free look period?", "expected_answer_contains": ["30 days", "thirty days", "30-day"], "expected_pages": [19, 50]}
+{"id": "l01", "policy_id": 13, "question": "What happens if the life assured commits suicide in the first year?", "expected_answer_contains": ["80%"], "expected_pages": [10, 11, 24]}
+{"id": "l02", "policy_id": 13, "question": "What is the grace period if I pay premiums monthly?", "expected_answer_contains": ["15 days", "15-day"], "expected_pages": [9]}
+{"id": "l03", "policy_id": 13, "question": "How long do I have to revive a lapsed policy?", "expected_answer_contains": ["five", "5 years"], "expected_pages": [8, 10]}
+{"id": "l04", "policy_id": 13, "question": "What counts as terminal illness under this policy?", "expected_answer_contains": ["6 months", "six months"], "expected_pages": [4]}
+{"id": "l05", "policy_id": 13, "question": "What is the free look period for this life policy?", "expected_answer_contains": ["30 days", "30-day"], "expected_pages": [9, 24]}
+{"id": "m01", "policy_id": 14, "question": "What is the IDV of my bike?", "expected_answer_contains": ["1,65,608", "165608"], "expected_pages": [3]}
+{"id": "m02", "policy_id": 14, "question": "What no claim bonus do I currently have?", "expected_answer_contains": ["25%"], "expected_pages": [1, 3]}
+{"id": "m03", "policy_id": 14, "question": "What is the compulsory deductible?", "expected_answer_contains": ["100"], "expected_pages": [3]}
+{"id": "m04", "policy_id": 14, "question": "Does zero depreciation cover consumables?", "expected_answer_contains": ["not covered", "does not cover", "doesn't cover", "not include"], "expected_pages": [3]}
+{"id": "m05", "policy_id": 14, "question": "How is a total theft claim settled?", "expected_answer_contains": ["invoice", "idv"], "expected_pages": [2, 4]}

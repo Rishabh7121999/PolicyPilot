@@ -11,3 +11,15 @@ export const TYPE_LABEL: Record<string, string> = {
   motor: 'Motor Insurance',
   unknown: 'Policy',
 }
+
+/** A short, human label for a policy in a selection list — "Health Insurance · ReAssure 2.0" —
+ * instead of the raw uploaded filename. */
+export function policyDisplayLabel(p: {
+  policy_type: string
+  product_name?: string | null
+  insurer?: string | null
+}): string {
+  const type = TYPE_LABEL[p.policy_type] ?? TYPE_LABEL.unknown
+  const detail = p.product_name || p.insurer
+  return detail ? `${type} · ${detail}` : type
+}

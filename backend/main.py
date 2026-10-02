@@ -3,13 +3,16 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.config import VITE_DEV_ORIGIN
+from backend.config import JINA_API_KEY, VITE_DEV_ORIGIN
 from backend.db import Base, engine, sync_columns
 from backend.routers import auth, chat, chat_sessions, policies, voice
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    if not JINA_API_KEY:
+        raise RuntimeError("JINA_API_KEY is not set (needed for reranking); add it to .env")
+
     Base.metadata.create_all(bind=engine)
     sync_columns()
     yield

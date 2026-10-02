@@ -1,4 +1,6 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, type KeyboardEvent } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import type { HealthDetails, LifeDetails, MotorDetails, PolicySummary } from '../api/types'
 import { ActionCard } from './ActionCard'
 import { ChatIcon, DocumentIcon, QuestionIcon, UmbrellaIcon } from './icons'
@@ -16,19 +18,19 @@ function Field({ label, value }: { label: string; value: string | null | undefin
   if (!value) return null
 
   return (
-    <div className="flex items-center justify-between border-b border-beige-100 py-2.5 text-sm last:border-0">
-      <dt className="text-neutral-500">{label}</dt>
-      <dd className="font-medium text-neutral-900">{value}</dd>
+    <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-beige-100 py-2.5 text-sm last:border-0">
+      <dt className="shrink-0 text-neutral-500">{label}</dt>
+      <dd className="text-right font-medium text-neutral-900">{value}</dd>
     </div>
   )
 }
 
-function ListSection({ title, items }: { title: string; items: string[] }) {
+function ListSection({ title, items, tone }: { title: string; items: string[]; tone?: 'danger' }) {
   if (items.length === 0) return null
 
   return (
-    <div>
-      <h3 className="text-sm font-semibold text-neutral-900">{title}</h3>
+    <div className={tone === 'danger' ? 'rounded-xl border border-red-100 bg-red-50/60 p-4' : ''}>
+      <h3 className={`text-sm font-semibold ${tone === 'danger' ? 'text-red-800' : 'text-neutral-900'}`}>{title}</h3>
       <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-neutral-700">
         {items.map((item) => (
           <li key={item}>{item}</li>
@@ -123,13 +125,39 @@ export function PolicyDetailTabs({
     tabBarRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
+  // Standard tablist keyboard model: arrows move between tabs, Home/End jump.
+  function handleTabKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+    const i = TABS.findIndex((t) => t.id === tab)
+    let next: number | null = null
+    if (e.key === 'ArrowRight') next = (i + 1) % TABS.length
+    else if (e.key === 'ArrowLeft') next = (i - 1 + TABS.length) % TABS.length
+    else if (e.key === 'Home') next = 0
+    else if (e.key === 'End') next = TABS.length - 1
+    if (next === null) return
+
+    e.preventDefault()
+    setTab(TABS[next].id)
+    document.getElementById(`tab-${TABS[next].id}`)?.focus()
+  }
+
   return (
     <div>
-      <div ref={tabBarRef} className="flex gap-1 overflow-x-auto border-b border-beige-200">
+      <div
+        ref={tabBarRef}
+        role="tablist"
+        aria-label="Policy details"
+        onKeyDown={handleTabKeyDown}
+        className="flex gap-1 overflow-x-auto border-b border-beige-200"
+      >
         {TABS.map((t) => (
           <button
             key={t.id}
+            id={`tab-${t.id}`}
             type="button"
+            role="tab"
+            aria-selected={tab === t.id}
+            aria-controls="policy-tabpanel"
+            tabIndex={tab === t.id ? 0 : -1}
             onClick={() => selectTab(t.id)}
             className={`shrink-0 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
               tab === t.id
@@ -142,7 +170,13 @@ export function PolicyDetailTabs({
         ))}
       </div>
 
-      <div className="mt-6 animate-fade-in" key={tab}>
+      <div
+        id="policy-tabpanel"
+        role="tabpanel"
+        aria-labelledby={`tab-${tab}`}
+        className="mt-6 animate-fade-in"
+        key={tab}
+      >
         {tab === 'overview' && (
           <div className="space-y-6">
             <div className="rounded-2xl border border-beige-200 bg-white p-5">
@@ -200,7 +234,7 @@ export function PolicyDetailTabs({
         {tab === 'covered' && (
           <div className="space-y-6 rounded-2xl border border-beige-200 bg-white p-5">
             <ListSection title="Riders / Add-Ons" items={summary.riders} />
-            <ListSection title="Key Exclusions" items={summary.key_exclusions} />
+            <ListSection title="Not covered" items={summary.key_exclusions} tone="danger" />
             {summary.waiting_periods.length > 0 && (
               <div>
                 <h3 className="text-sm font-semibold text-neutral-900">Waiting Periods</h3>
@@ -229,9 +263,13 @@ export function PolicyDetailTabs({
         {tab === 'claim' && (
           <div className="rounded-2xl border border-beige-200 bg-white p-5">
             <h3 className="text-sm font-semibold text-neutral-900">Claim Process</h3>
-            <p className="mt-2 text-sm text-neutral-700">
-              {summary.claim_process_summary ?? 'No claim process details were found in this document.'}
-            </p>
+            {summary.claim_process_summary ? (
+              <div className="mt-2 space-y-2 text-sm leading-relaxed text-neutral-700 [&_ol]:list-decimal [&_ol]:space-y-1 [&_ol]:pl-5 [&_ul]:list-disc [&_ul]:space-y-1 [&_ul]:pl-5">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{summary.claim_process_summary}</ReactMarkdown>
+              </div>
+            ) : (
+              <p className="mt-2 text-sm text-neutral-500">No claim process details were found in this document.</p>
+            )}
           </div>
         )}
 

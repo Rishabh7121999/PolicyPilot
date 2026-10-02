@@ -1,32 +1,37 @@
-from langchain_community.cross_encoders import HuggingFaceCrossEncoder
+import logging
+import time
+
+import requests
 from langchain_community.retrievers import BM25Retriever
 from langchain_core.documents import Document
-from langchain_classic.retrievers import ContextualCompressionRetriever, EnsembleRetriever
-from langchain_classic.retrievers.document_compressors import CrossEncoderReranker
+from langchain_core.retrievers import BaseRetriever
+from langchain_classic.retrievers import EnsembleRetriever
 
+from backend.config import JINA_API_KEY
+from backend.core.rate_limiter import QuotaExceeded, acquire, record_usage
 from backend.rag.vectorstore import get_vectordb
 
-RERANKER_MODEL_NAME = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+logger = logging.getLogger(__name__)
+
+JINA_RERANK_URL = "https://api.jina.ai/v1/rerank"
+RERANKER_MODEL_NAME = "jina-reranker-v2-base-multilingual"
+# Key into backend/core/rate_limiter.py's LIMITS.
+JINA_RATE_LIMIT_KEY = "jina-reranker"
+# Measured on these policies: ~3.8 chars per Jina token.
+JINA_CHARS_PER_TOKEN = 3
+# Past this, fall back to the un-reranked fused order rather than stall the chat.
+RERANK_TIMEOUT_S = 3.0
 
 # How many candidates each leg of the hybrid search pulls before fusion/reranking.
-DENSE_FETCH_K = 20
-SPARSE_FETCH_K = 20
-# Final number of chunks handed to the LLM, after cross-encoder reranking.
+DENSE_FETCH_K = 12
+SPARSE_FETCH_K = 12
+# Final number of chunks handed to the LLM, after reranking.
 FINAL_K = 8
 
 vectordb = get_vectordb()
 
-_cross_encoder = None
+_rerank_session = requests.Session()
 _bm25_corpus_docs: list[Document] | None = None
-
-
-def _get_cross_encoder() -> HuggingFaceCrossEncoder:
-    global _cross_encoder
-
-    if _cross_encoder is None:
-        _cross_encoder = HuggingFaceCrossEncoder(model_name=RERANKER_MODEL_NAME)
-
-    return _cross_encoder
 
 
 def _load_corpus() -> list[Document]:
@@ -67,12 +72,10 @@ def _matches_filter(doc: Document, metadata_filter: dict | None) -> bool:
     return all(doc.metadata.get(key) == value for key, value in metadata_filter.items())
 
 
-def get_hybrid_retriever(
-    metadata_filter: dict | None = None,
-    k: int = FINAL_K,
-) -> ContextualCompressionRetriever:
-    """Dense (Chroma/MMR) + sparse (BM25) retrieval, fused with reciprocal rank
-    fusion, then reranked by a cross-encoder for the final top-k.
+def get_hybrid_retriever(metadata_filter: dict | None = None) -> BaseRetriever:
+    """Dense (Chroma/MMR) + sparse (BM25) retrieval, fused with reciprocal
+    rank fusion. Returns candidates in fused order, not yet reranked -- see
+    `retrieve()` for the full pipeline.
 
     metadata_filter: e.g. {"policy_type": "health"} or {"policy_id": "3"}.
     """
@@ -92,24 +95,72 @@ def get_hybrid_retriever(
     # BM25Retriever errors on an empty corpus (e.g. a brand-new, empty vector
     # store) -- fall back to dense-only in that case.
     if not filtered_corpus:
-        base_retriever = dense_retriever
-    else:
-        bm25_retriever = BM25Retriever.from_documents(filtered_corpus)
-        bm25_retriever.k = min(SPARSE_FETCH_K, len(filtered_corpus))
+        return dense_retriever
 
-        base_retriever = EnsembleRetriever(
-            retrievers=[dense_retriever, bm25_retriever],
-            weights=[0.5, 0.5],
-        )
+    bm25_retriever = BM25Retriever.from_documents(filtered_corpus)
+    bm25_retriever.k = min(SPARSE_FETCH_K, len(filtered_corpus))
 
-    reranker = CrossEncoderReranker(model=_get_cross_encoder(), top_n=k)
-
-    return ContextualCompressionRetriever(
-        base_compressor=reranker,
-        base_retriever=base_retriever,
+    return EnsembleRetriever(
+        retrievers=[dense_retriever, bm25_retriever],
+        weights=[0.5, 0.5],
     )
 
 
-# Unfiltered hybrid+reranked retriever, used when policy detection can't
-# confidently narrow the search to one policy_type.
-retriever = get_hybrid_retriever()
+def rerank(query: str, docs: list[Document], k: int = FINAL_K) -> tuple[list[Document], bool]:
+    """Rerank with the Jina Reranker API. Returns (top-k docs, fell_back).
+
+    On any API failure (timeout, 429, 5xx, bad response) logs a warning and
+    returns the first k docs in their incoming (RRF-fused) order instead, so
+    a reranker outage degrades ordering but never fails the chat.
+    """
+    if len(docs) <= 1:
+        return docs[:k], False
+
+    documents = [doc.page_content for doc in docs]
+    estimated_tokens = (len(query) + sum(len(d) for d in documents)) // JINA_CHARS_PER_TOKEN
+
+    try:
+        # Never wait on the chat path: over budget means fall back right away.
+        reservation = acquire(JINA_RATE_LIMIT_KEY, estimated_tokens, max_wait_s=0)
+    except QuotaExceeded as e:
+        logger.warning("Jina rerank skipped, using fused order: %s", e)
+        return docs[:k], True
+
+    try:
+        resp = _rerank_session.post(
+            JINA_RERANK_URL,
+            headers={"Authorization": f"Bearer {JINA_API_KEY}"},
+            json={
+                "model": RERANKER_MODEL_NAME,
+                "query": query,
+                "documents": documents,
+                "top_n": k,
+                "return_documents": False,
+            },
+            timeout=RERANK_TIMEOUT_S,
+        )
+        resp.raise_for_status()
+        body = resp.json()
+        results = body["results"]
+        record_usage(reservation, body.get("usage", {}).get("total_tokens"))
+
+        return [docs[r["index"]] for r in results], False
+
+    except (requests.RequestException, KeyError, ValueError, IndexError) as e:
+        logger.warning("Jina rerank failed, using fused order: %s: %s", type(e).__name__, e)
+        return docs[:k], True
+
+
+def retrieve(
+    query: str,
+    metadata_filter: dict | None = None,
+    k: int = FINAL_K,
+) -> tuple[list[Document], dict]:
+    """Hybrid retrieval + rerank. Returns (docs, info) where info carries
+    `rerank` (seconds) and `rerank_fallback` (bool) for the timings dict."""
+    candidates = get_hybrid_retriever(metadata_filter).invoke(query)
+
+    start = time.time()
+    docs, fell_back = rerank(query, candidates, k)
+
+    return docs, {"rerank": round(time.time() - start, 2), "rerank_fallback": fell_back}

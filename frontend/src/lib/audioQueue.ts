@@ -9,6 +9,7 @@ export class AudioQueuePlayer {
   private current: HTMLAudioElement | null = null
   private playing = false
   private stopped = false
+  private usingBrowserSpeech = false
   private onDone?: () => void
 
   constructor(onDone?: () => void) {
@@ -62,6 +63,31 @@ export class AudioQueuePlayer {
     return this.playing
   }
 
+  /**
+   * Fallback for when server TTS is unavailable (e.g. its small daily quota
+   * is spent): speak with the browser's built-in voice instead of staying
+   * silent. Resolves once speech finishes or `stop()` is called.
+   */
+  speakWithBrowser(text: string): Promise<void> {
+    const synth = typeof window !== 'undefined' ? window.speechSynthesis : undefined
+    if (this.stopped || !synth || !text.trim()) return Promise.resolve()
+
+    this.playing = true
+    this.usingBrowserSpeech = true
+
+    return new Promise((resolve) => {
+      const utterance = new SpeechSynthesisUtterance(text)
+      const finish = () => {
+        this.usingBrowserSpeech = false
+        this.playing = false
+        resolve()
+      }
+      utterance.onend = finish
+      utterance.onerror = finish
+      synth.speak(utterance)
+    })
+  }
+
   stop() {
     this.stopped = true
     this.playing = false
@@ -69,6 +95,9 @@ export class AudioQueuePlayer {
     if (this.current) {
       this.current.pause()
       this.current = null
+    }
+    if (this.usingBrowserSpeech) {
+      window.speechSynthesis.cancel()
     }
   }
 }

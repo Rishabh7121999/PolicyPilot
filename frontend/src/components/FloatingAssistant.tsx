@@ -6,11 +6,10 @@ import { MicButton } from './MicButton'
 import { ArrowRightIcon, ChatIcon, ChevronDownIcon, CloseIcon, LeafLogoIcon, SendIcon } from './icons'
 import { useVoiceRecorder } from '../hooks/useVoiceRecorder'
 import { AudioQueuePlayer } from '../lib/audioQueue'
+import { policyDisplayLabel } from '../lib/policyType'
 import type { ClarificationOption, PolicyListItem } from '../api/types'
 
-function policyLabel(p: PolicyListItem): string {
-  return [p.insurer, p.product_name].filter(Boolean).join(' — ') || `${p.policy_type} policy`
-}
+const policyLabel = policyDisplayLabel
 
 const SUGGESTED_PROMPTS = [
   'What is covered in my policy?',
@@ -101,7 +100,10 @@ export function FloatingAssistant() {
     try {
       await speakTextStream(text, (blob) => player.push(blob))
     } catch (err) {
-      console.error('Voice playback failed:', err)
+      // Server TTS unavailable (e.g. its daily quota is spent) -- use the
+      // browser's own voice rather than answering in silence.
+      console.warn('Server voice unavailable, using browser speech:', err)
+      await player.speakWithBrowser(text)
     } finally {
       player.end()
     }
@@ -236,10 +238,11 @@ export function FloatingAssistant() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="fixed bottom-6 right-6 z-40 flex items-center gap-2 rounded-full bg-sage-800 px-4 py-3 text-sm font-medium text-white shadow-lg hover:bg-sage-900"
+        className="fixed bottom-4 right-4 z-40 flex items-center gap-2 rounded-full bg-sage-800 px-4 py-3 text-sm font-medium text-white shadow-lg transition-transform duration-150 hover:bg-sage-900 hover:-translate-y-0.5 active:scale-95 sm:bottom-6 sm:right-6"
       >
         <LeafLogoIcon className="h-5 w-5" />
-        {policyId ? 'Ask about your policy' : 'Ask about your policies'}
+        <span className="hidden sm:inline">{policyId ? 'Ask about your policy' : 'Ask about your policies'}</span>
+        <span className="sm:hidden">Ask</span>
       </button>
     )
   }
@@ -263,7 +266,7 @@ export function FloatingAssistant() {
                 key={prompt}
                 type="button"
                 onClick={() => sendMessage(prompt)}
-                className="rounded-full border border-beige-200 px-3 py-1.5 text-xs font-medium text-neutral-600 hover:bg-beige-100"
+                className="rounded-full border border-beige-200 px-3 py-1.5 text-sm text-neutral-700 hover:bg-beige-100"
               >
                 {prompt}
               </button>
@@ -272,11 +275,8 @@ export function FloatingAssistant() {
         </div>
       )}
       {messages.map((m, i) => (
-        <ChatBubble key={i} message={m} onSelectClarification={handleSelectClarification} />
+        <ChatBubble key={i} message={m} policies={policies} onSelectClarification={handleSelectClarification} compact />
       ))}
-      {busy && messages[messages.length - 1]?.text === '' && (
-        <p className="text-sm text-neutral-500">Thinking…</p>
-      )}
       <div ref={scrollRef} />
     </div>
   )
@@ -284,7 +284,7 @@ export function FloatingAssistant() {
   return (
     <div
       ref={panelRef}
-      className="fixed bottom-6 right-6 z-40 flex h-[560px] w-[380px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-beige-200 bg-cream-50 shadow-2xl"
+      className="animate-fade-in fixed inset-x-4 bottom-4 z-40 flex h-[min(560px,75vh)] w-auto flex-col overflow-hidden rounded-2xl border border-beige-200 bg-cream-50 shadow-2xl sm:inset-x-auto sm:right-6 sm:bottom-6 sm:h-[560px] sm:w-[380px]"
     >
       <div className="flex items-center justify-between border-b border-beige-200 px-4 py-3">
         <div className="flex items-center gap-2">
@@ -302,7 +302,7 @@ export function FloatingAssistant() {
           <button
             type="button"
             onClick={() => setOpen(false)}
-            className="rounded-full p-1 text-neutral-400 hover:bg-beige-100"
+            className="flex h-8 w-8 items-center justify-center rounded-full text-neutral-500 hover:bg-beige-100"
             aria-label="Close assistant"
           >
             <CloseIcon className="h-4 w-4" />

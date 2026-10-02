@@ -1,6 +1,7 @@
 from typing import Literal
 
-from langchain_google_genai import ChatGoogleGenerativeAI
+from backend.core.llm import get_chat_model
+from backend.core.rate_limiter import ModelOverloaded
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field
 
@@ -84,14 +85,14 @@ class PolicySummary(BaseModel):
     motor_details: MotorDetails | None = Field(default=None, description="Populate only if policy_type is 'motor'")
 
 
-llm = ChatGoogleGenerativeAI(
-    model="gemini-3.1-flash-lite",
-    temperature=0,
+# Runs in a background ingestion job, so it can wait out a busy minute
+# window rather than fail the upload.
+structured_llm = get_chat_model(
+    max_output_tokens=8192,
     timeout=60,
-    max_retries=2,
+    max_wait_s=120,
+    schema=PolicySummary,
 )
-
-structured_llm = llm.with_structured_output(PolicySummary)
 
 prompt = ChatPromptTemplate.from_template("""
 You are an expert insurance policy analyst.
@@ -117,7 +118,13 @@ Policy Document:
 {document_text}
 """)
 
-_chain = prompt | structured_llm
+# If every model in the rotation is overloaded (503), back off and retry.
+# Quota errors aren't retried here -- the limiter already waited for them.
+_chain = (prompt | structured_llm).with_retry(
+    retry_if_exception_type=(ModelOverloaded,),
+    stop_after_attempt=4,
+    wait_exponential_jitter=True,
+)
 
 
 def extract_policy_summary(full_text: str) -> PolicySummary:

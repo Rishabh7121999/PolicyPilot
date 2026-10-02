@@ -1,14 +1,8 @@
-from langchain_google_genai import ChatGoogleGenerativeAI
+from backend.core.llm import get_chat_model
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 
-llm = ChatGoogleGenerativeAI(
-    model="gemini-3.1-flash-lite",
-    temperature=0,
-    timeout=20,
-    max_retries=2,
-    max_output_tokens=768,
-)
+llm = get_chat_model(max_output_tokens=768, timeout=20, max_wait_s=5)
 
 prompt = ChatPromptTemplate.from_template("""
 You are an expert insurance advisor.

@@ -122,8 +122,33 @@ export function updatePolicyType(id: number, policyType: string): Promise<Policy
   })
 }
 
-export function getPolicyFileUrl(id: number): string {
-  return `${API_BASE_URL}/policies/${id}/file`
+// The file endpoint requires the bearer token, which a plain <a href> or
+// window.open navigation can't send -- so fetch it as a blob instead and hand
+// callers an object URL (or trigger the download from one).
+export async function fetchPolicyFile(id: number): Promise<Blob> {
+  const res = await fetch(`${API_BASE_URL}/policies/${id}/file`, { headers: authHeaders() })
+
+  if (!res.ok) {
+    if (res.status === 401) onUnauthorized?.()
+    throw new Error(`${res.status} ${res.statusText}`)
+  }
+
+  return res.blob()
+}
+
+export function saveBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
+export async function downloadPolicyFile(id: number, filename: string): Promise<void> {
+  saveBlob(await fetchPolicyFile(id), filename)
 }
 
 export function deletePolicy(id: number): Promise<void> {

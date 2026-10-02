@@ -1,22 +1,23 @@
 import os
-import re
-from collections.abc import Iterator
 
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
+
+from backend.core.llm import CHARS_PER_TOKEN, translate_api_error
+from backend.core.rate_limiter import acquire, record_usage
 
 load_dotenv()
 
 TTS_MODEL = "gemini-3.8-flash-lite-tts"
 VOICE_NAME = "Kore"
 
-# Fragments shorter than this get merged into the next sentence instead of
-# being sent to TTS on their own -- keeps voice mode from making a flurry of
-# tiny synthesis calls for things like "Rs." or a lone list number.
-MIN_SENTENCE_CHARS = 20
-
-_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
+# TTS quota is tiny (3 requests/min, 10/day on the free tier), so the whole
+# answer is synthesized in ONE call -- per-sentence calls would spend a
+# minute's quota on a single 3-sentence answer. Wait briefly for the minute
+# window; past that, the caller should fall back (the frontend uses the
+# browser's own speech synthesis).
+MAX_WAIT_S = 10
 
 _client = None
 
@@ -31,45 +32,32 @@ def _get_client() -> genai.Client:
 
 
 def speak(text: str) -> bytes:
-    """Synthesize speech for `text` and return WAV audio bytes."""
-    response = _get_client().models.generate_content(
-        model=TTS_MODEL,
-        contents=text,
-        config=types.GenerateContentConfig(
-            response_modalities=["AUDIO"],
-            speech_config=types.SpeechConfig(
-                voice_config=types.VoiceConfig(
-                    prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=VOICE_NAME)
-                )
+    """Synthesize speech for `text` and return WAV audio bytes.
+
+    Raises QuotaExceeded when the TTS quota is spent (or would need a wait
+    longer than MAX_WAIT_S), ModelOverloaded on a 503.
+    """
+    reservation = acquire(TTS_MODEL, len(text) // CHARS_PER_TOKEN + 1, MAX_WAIT_S)
+
+    try:
+        response = _get_client().models.generate_content(
+            model=TTS_MODEL,
+            contents=text,
+            config=types.GenerateContentConfig(
+                response_modalities=["AUDIO"],
+                speech_config=types.SpeechConfig(
+                    voice_config=types.VoiceConfig(
+                        prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=VOICE_NAME)
+                    )
+                ),
             ),
-        ),
-    )
+        )
+    except Exception as e:
+        raise translate_api_error(e, TTS_MODEL) from e
+
+    usage = response.usage_metadata
+    if usage is not None and usage.prompt_token_count is not None:
+        # TTS quota counts input (text) tokens.
+        record_usage(reservation, usage.prompt_token_count)
 
     return response.candidates[0].content.parts[0].inline_data.data
-
-
-def split_sentences(text: str) -> list[str]:
-    """Split into TTS-sized sentences, merging short fragments into their
-    neighbor so voice mode doesn't synthesize a flood of tiny clips."""
-    parts = [p.strip() for p in _SENTENCE_SPLIT_RE.split(text.strip()) if p.strip()]
-
-    if not parts:
-        return [text.strip()] if text.strip() else []
-
-    merged: list[str] = []
-
-    for part in parts:
-        if merged and len(merged[-1]) < MIN_SENTENCE_CHARS:
-            merged[-1] = f"{merged[-1]} {part}"
-        else:
-            merged.append(part)
-
-    return merged
-
-
-def speak_stream(text: str) -> Iterator[bytes]:
-    """Yield WAV bytes one sentence at a time, synthesizing each sentence only
-    as it's needed -- lets the caller start playing sentence 1 while sentence
-    2 is still being synthesized, instead of waiting for the whole answer."""
-    for sentence in split_sentences(text):
-        yield speak(sentence)

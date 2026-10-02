@@ -2,21 +2,18 @@ import time
 
 from backend.chains.insurance_chain import chain
 
-from backend.rag.retriever import retriever, get_hybrid_retriever
+from backend.rag.retriever import retrieve
 
 
 def _retrieve(query: str, policy_id: int | None, policy_type: str | None):
+    """Returns (docs, info) -- see `backend.rag.retriever.retrieve`."""
     if policy_id is not None:
-        return get_hybrid_retriever(
-            metadata_filter={"policy_id": str(policy_id)}
-        ).invoke(query)
+        return retrieve(query, metadata_filter={"policy_id": str(policy_id)})
 
     if policy_type in ["health", "life", "motor"]:
-        return get_hybrid_retriever(
-            metadata_filter={"policy_type": policy_type}
-        ).invoke(query)
+        return retrieve(query, metadata_filter={"policy_type": policy_type})
 
-    return retriever.invoke(query)
+    return retrieve(query)
 
 
 def _build_context_and_sources(docs) -> tuple[str, list[str]]:
@@ -69,7 +66,8 @@ def ask_insurance_bot_stream(
     start = time.time()
 
     try:
-        docs = _retrieve(rewritten_query, policy_id, policy_type)
+        docs, retrieval_info = _retrieve(rewritten_query, policy_id, policy_type)
+        timings.update(retrieval_info)
     except Exception as e:
         print(f"Retriever Error: {e}")
         docs = []

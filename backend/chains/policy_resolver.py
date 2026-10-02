@@ -1,6 +1,6 @@
 from typing import Literal
 
-from langchain_google_genai import ChatGoogleGenerativeAI
+from backend.core.llm import get_chat_model
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field
 
@@ -66,15 +66,12 @@ class PolicyResolution(BaseModel):
     )
 
 
-llm = ChatGoogleGenerativeAI(
-    model="gemini-3.1-flash-lite",
-    temperature=0,
-    timeout=20,
-    max_retries=2,
+structured_llm = get_chat_model(
     max_output_tokens=300,
+    timeout=20,
+    max_wait_s=5,
+    schema=PolicyResolution,
 )
-
-structured_llm = llm.with_structured_output(PolicyResolution)
 
 prompt = ChatPromptTemplate.from_template("""
 You are an insurance assistant's query-understanding step.

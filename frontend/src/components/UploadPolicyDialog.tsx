@@ -1,5 +1,4 @@
-import { useState, type DragEvent } from 'react'
-import { uploadPolicy } from '../api/client'
+import { useUploadFlow } from '../hooks/useUploadFlow'
 import { UploadIcon } from './icons'
 
 interface UploadPolicyDialogProps {
@@ -8,40 +7,8 @@ interface UploadPolicyDialogProps {
 }
 
 export function UploadPolicyDialog({ onClose, onUploaded }: UploadPolicyDialogProps) {
-  const [file, setFile] = useState<File | null>(null)
-  const [dragActive, setDragActive] = useState(false)
-  const [progress, setProgress] = useState(0)
-  const [submitting, setSubmitting] = useState(false)
-  const [processing, setProcessing] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  async function startUpload(selected: File) {
-    setFile(selected)
-    setError(null)
-    setSubmitting(true)
-    setProgress(0)
-
-    try {
-      await uploadPolicy(selected, setProgress)
-      setSubmitting(false)
-      setProcessing(true)
-      // Give the user a moment to see the "processing" state before closing —
-      // the actual status now lives on the policy detail/list pages, which poll.
-      setTimeout(() => {
-        onUploaded()
-      }, 900)
-    } catch (err) {
-      setSubmitting(false)
-      setError(err instanceof Error ? err.message : 'Upload failed')
-    }
-  }
-
-  function handleDrop(e: DragEvent<HTMLDivElement>) {
-    e.preventDefault()
-    setDragActive(false)
-    const dropped = e.dataTransfer.files?.[0]
-    if (dropped) startUpload(dropped)
-  }
+  const { file, dragActive, progress, submitting, processing, error, startUpload, handleDragOver, handleDragLeave, handleDrop } =
+    useUploadFlow(onUploaded)
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -52,11 +19,8 @@ export function UploadPolicyDialog({ onClose, onUploaded }: UploadPolicyDialogPr
         </p>
 
         <div
-          onDragOver={(e) => {
-            e.preventDefault()
-            setDragActive(true)
-          }}
-          onDragLeave={() => setDragActive(false)}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
           onDrop={handleDrop}
           className={`mt-5 flex flex-col items-center justify-center rounded-2xl border-2 border-dashed p-8 text-center transition-colors ${
             dragActive

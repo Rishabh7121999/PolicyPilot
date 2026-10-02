@@ -34,6 +34,7 @@
   --color-beige-50: #f8f5ee;
   --color-beige-100: #efe9d9;
   --color-beige-200: #e2d8bf;
+  --color-beige-300: #d4c7a6;
 }
 
 :root {
@@ -58,4 +59,33 @@ body {
 
 .animate-fade-in {
   animation: fade-in 0.15s ease-out;
+}
+
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-page-in {
+  animation: page-in 0.22s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-page-in,
+  .animate-fade-in {
+    animation: none;
+  }
+}
+
+/* Visible keyboard focus for every interactive element that doesn't draw its
+   own ring; mouse clicks don't trigger :focus-visible, so this stays quiet. */
+:where(a, button, select, summary, [role='button'], [role='tab']):focus-visible {
+  outline: 2px solid var(--color-sage-500);
+  outline-offset: 2px;
 }

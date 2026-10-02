@@ -1,20 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { listPolicies } from '../api/client'
+import { useAppShell } from '../context/AppShellContext'
 import { useAuth } from '../context/AuthContext'
-import { BellIcon, LogoutIcon, SearchIcon, UserIcon } from './icons'
-
-function getInitials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean)
-  return (
-    parts
-      .slice(0, 2)
-      .map((p) => p[0]?.toUpperCase())
-      .join('') || '?'
-  )
-}
+import { daysUntil, getInitials } from '../lib/format'
+import { BellIcon, LogoutIcon, MenuIcon, UserIcon } from './icons'
 
 export function Topbar() {
   const { user, logout } = useAuth()
+  const { openMobileNav, policiesVersion } = useAppShell()
+  const [dueCount, setDueCount] = useState(0)
   const navigate = useNavigate()
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -32,6 +27,20 @@ export function Topbar() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [menuOpen])
 
+  // Renewals due within 30 days (or overdue), for the bell's badge.
+  useEffect(() => {
+    listPolicies()
+      .then((policies) =>
+        setDueCount(
+          policies.filter((p) => {
+            const d = p.status === 'ready' ? daysUntil(p.policy_end_date_iso) : null
+            return d !== null && d <= 30
+          }).length,
+        ),
+      )
+      .catch(() => {})
+  }, [policiesVersion])
+
   function handleLogout() {
     setMenuOpen(false)
     logout()
@@ -39,24 +48,29 @@ export function Topbar() {
   }
 
   return (
-    <header className="flex items-center justify-between gap-4 border-b border-beige-200 bg-cream-50/80 px-6 py-4 backdrop-blur">
-      <div className="flex max-w-md flex-1 items-center gap-2 rounded-full border border-beige-200 bg-white px-4 py-2 text-sm text-neutral-500">
-        <SearchIcon className="h-4 w-4 shrink-0" />
-        <input
-          placeholder="Search anything about your policies…"
-          className="w-full bg-transparent text-neutral-700 outline-none placeholder:text-neutral-400"
-          disabled
-        />
-      </div>
+    <header className="flex items-center justify-between gap-2 border-b border-beige-200 bg-cream-50/80 px-3 py-3 backdrop-blur sm:gap-4 sm:px-6 sm:py-4">
+      <button
+        type="button"
+        onClick={openMobileNav}
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-neutral-600 hover:bg-beige-100 md:hidden"
+        aria-label="Open menu"
+      >
+        <MenuIcon className="h-5 w-5" />
+      </button>
 
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
-          className="relative rounded-full p-2 text-neutral-500 hover:bg-beige-100"
-          aria-label="Notifications"
+      <div className="flex flex-1 items-center justify-end gap-2 sm:gap-3">
+        <Link
+          to="/reminders"
+          className="relative flex h-9 w-9 items-center justify-center rounded-full text-neutral-600 hover:bg-beige-100"
+          aria-label={dueCount > 0 ? `Reminders: ${dueCount} renewal${dueCount === 1 ? '' : 's'} due soon` : 'Reminders'}
         >
           <BellIcon className="h-5 w-5" />
-        </button>
+          {dueCount > 0 && (
+            <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-semibold text-white">
+              {dueCount}
+            </span>
+          )}
+        </Link>
 
         <div className="relative" ref={menuRef}>
           <button
@@ -65,7 +79,7 @@ export function Topbar() {
             className="flex h-9 w-9 items-center justify-center rounded-full bg-sage-600 text-sm font-semibold text-white"
             aria-label="Account menu"
           >
-            {user ? getInitials(user.name) : <UserIcon className="h-5 w-5" />}
+            {user && getInitials(user.name) ? getInitials(user.name) : <UserIcon className="h-5 w-5" />}
           </button>
 
           {menuOpen && (
@@ -89,7 +103,7 @@ export function Topbar() {
                 className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50"
               >
                 <LogoutIcon className="h-4 w-4" />
-                Log Out
+                Log out
               </button>
             </div>
           )}

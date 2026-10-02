@@ -1,0 +1,168 @@
+"""Ingestion job for one uploaded policy: Docling parse + chunk, Gemini
+structured extraction, then vector-store and DB writes.
+
+    python -m backend.rag.ingest_job --policy-id N               # full job, in-process
+    python -m backend.rag.ingest_job --policy-id N --out r.json  # parse + extract only
+
+The full form is what `backend.rag.ingest --reindex-all` runs per policy, and
+what the Cloud Run Job will run in production. The `--out` form exists for
+the local backend (backend/services/ingestion.py): it runs this in a
+subprocess -- Docling's model stack has a flaky native crash (loky/joblib
+teardown race) when one process converts more than one PDF -- but keeps the
+writes in the server process, because Chroma's local persistent client isn't
+safe for writes from a second process while the server holds it open.
+
+Only this module and backend/rag/ingest.py import Docling (via
+backend/rag/loader.py), so the web process never needs it installed.
+"""
+
+import argparse
+import json
+import logging
+import sys
+
+from dotenv import load_dotenv
+
+load_dotenv()
+
+from langchain_core.documents import Document
+
+from backend.db import SessionLocal
+from backend.models import Policy
+from backend.rag.vectorstore import get_vectordb
+
+
+def process(policy_id: int) -> dict:
+    """Parse, chunk and extract. Returns a JSON-serializable result:
+    {"ok": True, "chunks": [...], "summary": {...}} or {"ok": False, "error": ...}.
+    Never raises."""
+    # Imported here, not at module level: the parent process imports
+    # `persist` from this module and must not pull in Docling.
+    from backend.chains.policy_summary_chain import extract_policy_summary
+    from backend.rag.loader import parse_and_chunk
+
+    db = SessionLocal()
+
+    try:
+        policy = db.get(Policy, policy_id)
+        if policy is None:
+            return {"ok": False, "error": f"Policy {policy_id} not found"}
+
+        chunks, full_text = parse_and_chunk(policy.file_path, policy_id=policy_id)
+        summary = extract_policy_summary(full_text)
+
+        for chunk in chunks:
+            chunk.metadata["policy_type"] = summary.policy_type
+
+        return {
+            "ok": True,
+            "chunks": [
+                {"page_content": doc.page_content, "metadata": doc.metadata}
+                for doc in chunks
+            ],
+            "summary": summary.model_dump(),
+        }
+    except Exception as e:
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+    finally:
+        db.close()
+
+
+def persist(policy_id: int, result: dict) -> bool:
+    """Write a `process()` result: replace the policy's chunks in the vector
+    store and mark the row ready, or mark it failed. Returns whether it
+    succeeded; never raises."""
+    db = SessionLocal()
+
+    try:
+        policy = db.get(Policy, policy_id)
+        if policy is None:
+            return False
+
+        if not result["ok"]:
+            raise RuntimeError(result["error"])
+
+        chunks = [
+            Document(page_content=c["page_content"], metadata=c["metadata"])
+            for c in result["chunks"]
+        ]
+
+        vectordb = get_vectordb()
+
+        # Idempotent re-runs (re-index, retried job): replace this policy's
+        # old chunks. Add first, delete after, so a failed add (e.g. an
+        # embedding quota error) leaves the previous chunks in place.
+        old_ids = vectordb.get(where={"policy_id": str(policy_id)}, include=[])["ids"]
+
+        vectordb.add_documents(chunks)
+
+        if old_ids:
+            vectordb.delete(ids=old_ids)
+
+        summary = result["summary"]
+
+        policy.summary_json = summary
+        policy.chunk_count = len(chunks)
+        policy.policy_type = summary.get("policy_type", "unknown")
+        policy.insurer = summary.get("insurer")
+        policy.product_name = summary.get("product_name")
+        policy.policy_number = summary.get("policy_number")
+        policy.sum_insured = summary.get("sum_insured")
+        policy.sum_insured_numeric = summary.get("sum_insured_numeric")
+        policy.policy_end_date = summary.get("policy_end_date")
+        policy.policy_end_date_iso = summary.get("policy_end_date_iso")
+        policy.status = "ready"
+        policy.error_message = None
+
+        db.commit()
+        return True
+
+    except Exception as e:
+        db.rollback()
+        policy = db.get(Policy, policy_id)
+
+        if policy is not None:
+            # A failed *re-index* of an already-ready policy keeps it ready:
+            # its previous chunks are still in place (see add-then-delete above).
+            if policy.status != "ready":
+                policy.status = "failed"
+            policy.error_message = str(e)
+            db.commit()
+
+        return False
+
+    finally:
+        db.close()
+
+
+def main():
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    # Keep our own INFO lines (e.g. loader's ocr=...) without Docling's chatter.
+    logging.getLogger("docling").setLevel(logging.WARNING)
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--policy-id", type=int, required=True)
+    parser.add_argument(
+        "--out",
+        help="Only parse + extract, writing the result JSON here (writes are left to the caller)",
+    )
+    args = parser.parse_args()
+
+    result = process(args.policy_id)
+
+    if args.out:
+        with open(args.out, "w") as f:
+            json.dump(result, f)
+        ok = result["ok"]
+    else:
+        ok = persist(args.policy_id, result)
+
+    if not result["ok"]:
+        print(result["error"], file=sys.stderr)
+
+    if not ok:
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

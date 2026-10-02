@@ -2,12 +2,13 @@ import struct
 import tempfile
 from pathlib import Path
 
-from fastapi import APIRouter, File, UploadFile
+from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import Response, StreamingResponse
 
+from backend.core.rate_limiter import ModelOverloaded, QuotaExceeded
 from backend.schemas import VoiceSpeakRequest
 from backend.voice.stt import transcribe
-from backend.voice.tts import speak, speak_stream
+from backend.voice.tts import speak
 
 router = APIRouter(prefix="/voice", tags=["voice"])
 
@@ -28,10 +29,24 @@ def voice_transcribe(file: UploadFile = File(...)):
     return {"transcript": transcript}
 
 
+def _synthesize(text: str) -> bytes:
+    """`speak()`, with quota/overload errors turned into HTTP errors the
+    frontend can react to (it falls back to the browser's own speech)."""
+    try:
+        return speak(text)
+    except QuotaExceeded as e:
+        raise HTTPException(
+            status_code=429,
+            detail="Voice quota reached",
+            headers={"Retry-After": str(round(e.retry_after))},
+        ) from e
+    except ModelOverloaded as e:
+        raise HTTPException(status_code=503, detail="Voice model is busy") from e
+
+
 @router.post("/speak")
 def voice_speak(request: VoiceSpeakRequest):
-    audio_bytes = speak(request.text)
-    return Response(content=audio_bytes, media_type="audio/wav")
+    return Response(content=_synthesize(request.text), media_type="audio/wav")
 
 
 def _frame(payload: bytes) -> bytes:
@@ -43,12 +58,11 @@ def _frame(payload: bytes) -> bytes:
 
 @router.post("/speak-stream")
 def voice_speak_stream(request: VoiceSpeakRequest):
-    """Same as /voice/speak, but synthesizes and streams one sentence at a
-    time so the client can start playing the first sentence while later ones
-    are still being synthesized, instead of waiting for the full answer."""
+    """Same audio as /voice/speak, in the length-prefixed frame format the
+    frontend's player consumes. It's a single frame now: the TTS quota is too
+    small for one synthesis call per sentence (see backend/voice/tts.py). The
+    synthesis happens before the response starts, so a quota error can still
+    be returned as a proper 429 instead of a broken stream."""
+    wav_bytes = _synthesize(request.text)
 
-    def generate():
-        for wav_bytes in speak_stream(request.text):
-            yield _frame(wav_bytes)
-
-    return StreamingResponse(generate(), media_type="application/octet-stream")
+    return StreamingResponse(iter([_frame(wav_bytes)]), media_type="application/octet-stream")
