@@ -1,9 +1,15 @@
 import { useCallback, useRef, useState } from 'react'
 
 const SILENCE_RMS_THRESHOLD = 12
-const SILENCE_DURATION_MS = 1400
+// How long the user can pause (to think, mid-sentence) before the recording
+// is sent. 1.4s cut people off between phrases.
+const SILENCE_DURATION_MS = 2500
 const MAX_RECORDING_MS = 30000
+// Ignore sound in the first moments (the mic click, the end of the bot's audio).
 const MIN_SPEECH_MS = 300
+// Loud frames must add up to this much before it counts as speech, so a
+// single cough or bump doesn't arm the silence timer.
+const MIN_VOICED_MS = 250
 
 interface UseVoiceRecorderOptions {
   onRecorded: (blob: Blob) => void
@@ -21,6 +27,8 @@ export function useVoiceRecorder({ onRecorded }: UseVoiceRecorderOptions) {
   const lastSpeechAtRef = useRef(0)
   const spokeRef = useRef(false)
   const startedAtRef = useRef(0)
+  const lastFrameAtRef = useRef(0)
+  const voicedMsRef = useRef(0)
 
   const cleanupAudioGraph = useCallback(() => {
     if (rafRef.current !== null) {
@@ -50,12 +58,17 @@ export function useVoiceRecorder({ onRecorded }: UseVoiceRecorderOptions) {
     }
     const rms = Math.sqrt(sumSquares / data.length)
     const now = performance.now()
+    const frameMs = now - lastFrameAtRef.current
+    lastFrameAtRef.current = now
 
     if (rms > SILENCE_RMS_THRESHOLD) {
       lastSpeechAtRef.current = now
       if (!spokeRef.current && now - startedAtRef.current > MIN_SPEECH_MS) {
-        spokeRef.current = true
-        setHasSpoken(true)
+        voicedMsRef.current += frameMs
+        if (voicedMsRef.current >= MIN_VOICED_MS) {
+          spokeRef.current = true
+          setHasSpoken(true)
+        }
       }
     }
 
@@ -103,8 +116,10 @@ export function useVoiceRecorder({ onRecorded }: UseVoiceRecorderOptions) {
     mediaRecorderRef.current = recorder
 
     spokeRef.current = false
+    voicedMsRef.current = 0
     startedAtRef.current = performance.now()
     lastSpeechAtRef.current = performance.now()
+    lastFrameAtRef.current = performance.now()
     setHasSpoken(false)
     setRecording(true)
 

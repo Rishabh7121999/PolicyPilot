@@ -1,0 +1,512 @@
+[
+  {
+    "id": "h01",
+    "hit": true,
+    "retrieval_s": 1.091,
+    "pages": [
+      13,
+      36,
+      36,
+      24,
+      36,
+      36,
+      38,
+      35
+    ],
+    "rerank": 0.94,
+    "rerank_fallback": false
+  },
+  {
+    "id": "h02",
+    "hit": true,
+    "retrieval_s": 0.517,
+    "pages": [
+      35,
+      36,
+      13,
+      18,
+      43,
+      24,
+      21,
+      35
+    ],
+    "rerank": 0.5,
+    "rerank_fallback": false
+  },
+  {
+    "id": "h03",
+    "hit": true,
+    "retrieval_s": 0.519,
+    "pages": [
+      13,
+      36,
+      36,
+      24,
+      36,
+      36,
+      35,
+      42
+    ],
+    "rerank": 0.49,
+    "rerank_fallback": false
+  },
+  {
+    "id": "h04",
+    "hit": true,
+    "retrieval_s": 0.608,
+    "pages": [
+      14,
+      24,
+      27,
+      48,
+      46,
+      26,
+      22,
+      40
+    ],
+    "rerank": 0.58,
+    "rerank_fallback": false
+  },
+  {
+    "id": "h05",
+    "hit": true,
+    "retrieval_s": 0.546,
+    "pages": [
+      4,
+      26,
+      23,
+      10,
+      33,
+      25,
+      28,
+      15
+    ],
+    "rerank": 0.51,
+    "rerank_fallback": false
+  },
+  {
+    "id": "h06",
+    "hit": true,
+    "retrieval_s": 0.562,
+    "pages": [
+      35,
+      14,
+      43,
+      9,
+      27,
+      34,
+      42,
+      43
+    ],
+    "rerank": 0.53,
+    "rerank_fallback": false
+  },
+  {
+    "id": "h07",
+    "hit": true,
+    "retrieval_s": 0.622,
+    "pages": [
+      39,
+      39,
+      17,
+      16,
+      13,
+      31,
+      18,
+      37
+    ],
+    "rerank": 0.58,
+    "rerank_fallback": false
+  },
+  {
+    "id": "h08",
+    "hit": true,
+    "retrieval_s": 0.575,
+    "pages": [
+      40,
+      21,
+      24,
+      44,
+      17,
+      30,
+      41,
+      20
+    ],
+    "rerank": 0.54,
+    "rerank_fallback": false
+  },
+  {
+    "id": "h09",
+    "hit": true,
+    "retrieval_s": 0.563,
+    "pages": [
+      14,
+      4,
+      26,
+      10,
+      35,
+      19,
+      35,
+      45
+    ],
+    "rerank": 0.53,
+    "rerank_fallback": false
+  },
+  {
+    "id": "h10",
+    "hit": true,
+    "retrieval_s": 0.514,
+    "pages": [
+      26,
+      10,
+      27,
+      48,
+      25,
+      25,
+      37,
+      46
+    ],
+    "rerank": 0.49,
+    "rerank_fallback": false
+  },
+  {
+    "id": "h11",
+    "hit": true,
+    "retrieval_s": 0.549,
+    "pages": [
+      34,
+      30,
+      34,
+      30,
+      11,
+      24,
+      3,
+      35
+    ],
+    "rerank": 0.52,
+    "rerank_fallback": false
+  },
+  {
+    "id": "h12",
+    "hit": true,
+    "retrieval_s": 0.555,
+    "pages": [
+      25,
+      4,
+      20,
+      20,
+      22,
+      21,
+      23,
+      20
+    ],
+    "rerank": 0.52,
+    "rerank_fallback": false
+  },
+  {
+    "id": "t01",
+    "hit": true,
+    "retrieval_s": 0.506,
+    "pages": [
+      3,
+      17,
+      23,
+      54,
+      33,
+      22,
+      33,
+      30
+    ],
+    "rerank": 0.46,
+    "rerank_fallback": false
+  },
+  {
+    "id": "t02",
+    "hit": true,
+    "retrieval_s": 0.545,
+    "pages": [
+      45,
+      29,
+      59,
+      3,
+      28,
+      58,
+      37,
+      61
+    ],
+    "rerank": 0.51,
+    "rerank_fallback": false
+  },
+  {
+    "id": "t03",
+    "hit": true,
+    "retrieval_s": 0.601,
+    "pages": [
+      32,
+      61,
+      32,
+      21,
+      21,
+      21,
+      21,
+      21
+    ],
+    "rerank": 0.57,
+    "rerank_fallback": false
+  },
+  {
+    "id": "t04",
+    "hit": true,
+    "retrieval_s": 0.564,
+    "pages": [
+      34,
+      11,
+      61,
+      33,
+      34,
+      36,
+      13,
+      30
+    ],
+    "rerank": 0.53,
+    "rerank_fallback": false
+  },
+  {
+    "id": "t05",
+    "hit": true,
+    "retrieval_s": 0.043,
+    "pages": [
+      36,
+      34,
+      47,
+      31,
+      15,
+      33,
+      30,
+      66
+    ],
+    "rerank": 0.0,
+    "rerank_fallback": true
+  },
+  {
+    "id": "t06",
+    "hit": true,
+    "retrieval_s": 0.037,
+    "pages": [
+      26,
+      30,
+      30,
+      10,
+      30,
+      63,
+      29,
+      61
+    ],
+    "rerank": 0.0,
+    "rerank_fallback": true
+  },
+  {
+    "id": "t07",
+    "hit": true,
+    "retrieval_s": 0.036,
+    "pages": [
+      46,
+      16,
+      44,
+      53,
+      44,
+      53,
+      24,
+      40
+    ],
+    "rerank": 0.0,
+    "rerank_fallback": true
+  },
+  {
+    "id": "t08",
+    "hit": true,
+    "retrieval_s": 0.037,
+    "pages": [
+      50,
+      19,
+      52,
+      32,
+      48,
+      35,
+      47,
+      31
+    ],
+    "rerank": 0.0,
+    "rerank_fallback": true
+  },
+  {
+    "id": "l01",
+    "hit": true,
+    "retrieval_s": 0.036,
+    "pages": [
+      10,
+      9,
+      10,
+      4,
+      15,
+      24,
+      3,
+      10
+    ],
+    "rerank": 0.0,
+    "rerank_fallback": true
+  },
+  {
+    "id": "l02",
+    "hit": true,
+    "retrieval_s": 0.032,
+    "pages": [
+      9,
+      4,
+      9,
+      10,
+      9,
+      24,
+      9,
+      19
+    ],
+    "rerank": 0.0,
+    "rerank_fallback": true
+  },
+  {
+    "id": "l03",
+    "hit": true,
+    "retrieval_s": 0.033,
+    "pages": [
+      10,
+      13,
+      3,
+      10,
+      3,
+      9,
+      24,
+      19
+    ],
+    "rerank": 0.0,
+    "rerank_fallback": true
+  },
+  {
+    "id": "l04",
+    "hit": true,
+    "retrieval_s": 0.033,
+    "pages": [
+      8,
+      24,
+      5,
+      4,
+      3,
+      10,
+      8,
+      9
+    ],
+    "rerank": 0.0,
+    "rerank_fallback": true
+  },
+  {
+    "id": "l05",
+    "hit": true,
+    "retrieval_s": 0.031,
+    "pages": [
+      9,
+      9,
+      9,
+      8,
+      24,
+      3,
+      3,
+      4
+    ],
+    "rerank": 0.0,
+    "rerank_fallback": true
+  },
+  {
+    "id": "m01",
+    "hit": true,
+    "retrieval_s": 0.031,
+    "pages": [
+      3,
+      4,
+      1,
+      4,
+      3,
+      3,
+      1,
+      1
+    ],
+    "rerank": 0.0,
+    "rerank_fallback": true
+  },
+  {
+    "id": "m02",
+    "hit": true,
+    "retrieval_s": 0.552,
+    "pages": [
+      3,
+      1,
+      3,
+      2,
+      3,
+      4,
+      4,
+      3
+    ],
+    "rerank": 0.53,
+    "rerank_fallback": false
+  },
+  {
+    "id": "m03",
+    "hit": true,
+    "retrieval_s": 0.505,
+    "pages": [
+      3,
+      3,
+      3,
+      3,
+      2,
+      4,
+      1,
+      1
+    ],
+    "rerank": 0.5,
+    "rerank_fallback": false
+  },
+  {
+    "id": "m04",
+    "hit": true,
+    "retrieval_s": 0.537,
+    "pages": [
+      3,
+      3,
+      1,
+      3,
+      4,
+      2,
+      4,
+      3
+    ],
+    "rerank": 0.51,
+    "rerank_fallback": false
+  },
+  {
+    "id": "m05",
+    "hit": true,
+    "retrieval_s": 0.528,
+    "pages": [
+      4,
+      2,
+      3,
+      1,
+      3,
+      1,
+      4,
+      3
+    ],
+    "rerank": 0.52,
+    "rerank_fallback": false
+  }
+]

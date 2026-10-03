@@ -1,6 +1,8 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String
+from pgvector.sqlalchemy import Vector
+from sqlalchemy import JSON, Computed, DateTime, Float, ForeignKey, Index, Integer, String, Text
+from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.db import Base
@@ -88,3 +90,44 @@ class ChatMessage(Base):
     # assistant message asked the user which policy they meant.
     meta: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
+# Must match the bge-small-en-v1.5 output size (backend/rag/vectorstore.py).
+EMBEDDING_DIM = 384
+
+
+class Chunk(Base):
+    """One retrievable passage of a policy: its text, embedding and the
+    citation metadata. Replaces the Chroma collection and the in-memory BM25
+    index. Postgres-only (pgvector + tsvector)."""
+
+    __tablename__ = "chunks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    policy_id: Mapped[int] = mapped_column(
+        ForeignKey("policies.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    # Copied from the policy so retrieval can enforce per-user isolation with
+    # one indexed filter instead of a join.
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    policy_type: Mapped[str | None] = mapped_column(String, nullable=True)
+    source_file: Mapped[str] = mapped_column(String, nullable=False)
+    page: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    section: Mapped[str | None] = mapped_column(String, nullable=True)
+    chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    embedding = mapped_column(Vector(EMBEDDING_DIM), nullable=False)
+    # Keyword-search column, maintained by Postgres itself from `content`.
+    tsv = mapped_column(TSVECTOR, Computed("to_tsvector('english', content)", persisted=True))
+
+    __table_args__ = (
+        Index(
+            "ix_chunks_embedding",
+            "embedding",
+            postgresql_using="hnsw",
+            postgresql_ops={"embedding": "vector_cosine_ops"},
+        ),
+        Index("ix_chunks_tsv", "tsv", postgresql_using="gin"),
+    )

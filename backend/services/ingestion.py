@@ -6,7 +6,6 @@ from pathlib import Path
 
 from backend.config import BASE_DIR, INGESTION_MODE
 from backend.rag.ingest_job import persist
-from backend.rag.retriever import invalidate_bm25_cache
 
 
 def run_ingestion_job(policy_id: int) -> None:
@@ -16,7 +15,7 @@ def run_ingestion_job(policy_id: int) -> None:
     The Docling conversion + Gemini extraction happen in an isolated
     subprocess (`backend.rag.ingest_job --out`) to avoid a flaky native crash
     that would otherwise eventually take down the whole backend process; the
-    vector-store and DB writes then happen here (see `ingest_job.persist`).
+    chunk and DB writes then happen here (see `ingest_job.persist`).
     """
     if INGESTION_MODE != "local":
         raise NotImplementedError(f"INGESTION_MODE={INGESTION_MODE!r} is not supported yet")
@@ -45,4 +44,3 @@ def run_ingestion_job(policy_id: int) -> None:
         Path(out_path).unlink(missing_ok=True)
 
     persist(policy_id, result)
-    invalidate_bm25_cache()

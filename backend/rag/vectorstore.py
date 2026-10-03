@@ -1,27 +1,20 @@
 import os
 
 from fastembed import TextEmbedding
-from langchain_chroma import Chroma
 from langchain_core.embeddings import Embeddings
 
-from backend.config import BASE_DIR, VECTORDB_DIR
+from backend.config import BASE_DIR
 
-# Runs locally on ONNX Runtime via fastembed -- no torch, no API quota.
+# Runs locally on ONNX Runtime via fastembed -- no torch, no API quota. The
+# `chunks.embedding` column is sized to this model (models.py:EMBEDDING_DIM), so
+# changing it needs a migration plus a re-index.
 EMBEDDING_MODEL_NAME = "BAAI/bge-small-en-v1.5"
-
-# Versioned by embedding model + dimensions: vectors from different models
-# live in different spaces, so a model change must never write into (or
-# query) an existing collection. Re-index with `backend.rag.ingest --reindex-all`.
-COLLECTION_NAME = "policies_bge384"
 
 # Where fastembed keeps the downloaded ONNX model. Its default is a temp dir
 # the OS may clear; in a container image, point this at a baked-in path.
 EMBEDDING_CACHE_DIR = os.getenv("FASTEMBED_CACHE_PATH", str(BASE_DIR / ".cache" / "fastembed"))
 
-PERSIST_DIRECTORY = str(VECTORDB_DIR)
-
 _embeddings = None
-_vectordb = None
 
 
 class LocalEmbeddings(Embeddings):
@@ -44,17 +37,3 @@ def get_embeddings() -> Embeddings:
         _embeddings = LocalEmbeddings()
 
     return _embeddings
-
-
-def get_vectordb() -> Chroma:
-    global _vectordb
-
-    if _vectordb is None:
-        _vectordb = Chroma(
-            collection_name=COLLECTION_NAME,
-            persist_directory=PERSIST_DIRECTORY,
-            embedding_function=get_embeddings(),
-            collection_metadata={"hnsw:space": "cosine"},
-        )
-
-    return _vectordb

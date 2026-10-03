@@ -5,15 +5,15 @@ from backend.chains.insurance_chain import chain
 from backend.rag.retriever import retrieve
 
 
-def _retrieve(query: str, policy_id: int | None, policy_type: str | None):
+def _retrieve(query: str, policy_id: int | None, policy_type: str | None, user_id: int | None = None):
     """Returns (docs, info) -- see `backend.rag.retriever.retrieve`."""
     if policy_id is not None:
-        return retrieve(query, metadata_filter={"policy_id": str(policy_id)})
+        return retrieve(query, policy_id=policy_id, user_id=user_id)
 
     if policy_type in ["health", "life", "motor"]:
-        return retrieve(query, metadata_filter={"policy_type": policy_type})
+        return retrieve(query, policy_type=policy_type, user_id=user_id)
 
-    return retrieve(query)
+    return retrieve(query, user_id=user_id)
 
 
 def _build_context_and_sources(docs) -> tuple[str, list[str]]:
@@ -45,6 +45,7 @@ def ask_insurance_bot_stream(
     policy_type: str | None = None,
     standalone_query: str | None = None,
     voice: bool = False,
+    user_id: int | None = None,
 ) -> dict:
     """Retrieval, then streaming generation.
 
@@ -66,7 +67,7 @@ def ask_insurance_bot_stream(
     start = time.time()
 
     try:
-        docs, retrieval_info = _retrieve(rewritten_query, policy_id, policy_type)
+        docs, retrieval_info = _retrieve(rewritten_query, policy_id, policy_type, user_id)
         timings.update(retrieval_info)
     except Exception as e:
         print(f"Retriever Error: {e}")

@@ -97,13 +97,18 @@ export function FloatingAssistant() {
     audioPlayerRef.current = player
     setSpeaking(true)
 
+    let receivedAudio = false
     try {
-      await speakTextStream(text, (blob) => player.push(blob))
+      await speakTextStream(text, (blob) => {
+        receivedAudio = true
+        player.push(blob)
+      })
     } catch (err) {
-      // Server TTS unavailable (e.g. its daily quota is spent) -- use the
-      // browser's own voice rather than answering in silence.
-      console.warn('Server voice unavailable, using browser speech:', err)
-      await player.speakWithBrowser(text)
+      // Server TTS unavailable (backend down, synthesis error) -- use the
+      // browser's own voice rather than answering in silence. Not if some
+      // sentences already played, or the answer would start over.
+      console.warn('Server voice failed:', err)
+      if (!receivedAudio) await player.speakWithBrowser(text)
     } finally {
       player.end()
     }

@@ -64,8 +64,7 @@ export class AudioQueuePlayer {
   }
 
   /**
-   * Fallback for when server TTS is unavailable (e.g. its small daily quota
-   * is spent): speak with the browser's built-in voice instead of staying
+   * Fallback for when server TTS is unavailable: speak with the browser's built-in voice instead of staying
    * silent. Resolves once speech finishes or `stop()` is called.
    */
   speakWithBrowser(text: string): Promise<void> {

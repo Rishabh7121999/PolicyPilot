@@ -1,5 +1,5 @@
 """Ingestion job for one uploaded policy: Docling parse + chunk, Gemini
-structured extraction, then vector-store and DB writes.
+structured extraction, then chunk and DB writes (one Postgres transaction).
 
     python -m backend.rag.ingest_job --policy-id N               # full job, in-process
     python -m backend.rag.ingest_job --policy-id N --out r.json  # parse + extract only
@@ -9,8 +9,7 @@ what the Cloud Run Job will run in production. The `--out` form exists for
 the local backend (backend/services/ingestion.py): it runs this in a
 subprocess -- Docling's model stack has a flaky native crash (loky/joblib
 teardown race) when one process converts more than one PDF -- but keeps the
-writes in the server process, because Chroma's local persistent client isn't
-safe for writes from a second process while the server holds it open.
+writes in the server process.
 
 Only this module and backend/rag/ingest.py import Docling (via
 backend/rag/loader.py), so the web process never needs it installed.
@@ -29,7 +28,7 @@ from langchain_core.documents import Document
 
 from backend.db import SessionLocal
 from backend.models import Policy
-from backend.rag.vectorstore import get_vectordb
+from backend.rag import chunk_store
 
 
 def process(policy_id: int) -> dict:
@@ -69,9 +68,10 @@ def process(policy_id: int) -> dict:
 
 
 def persist(policy_id: int, result: dict) -> bool:
-    """Write a `process()` result: replace the policy's chunks in the vector
-    store and mark the row ready, or mark it failed. Returns whether it
-    succeeded; never raises."""
+    """Write a `process()` result: replace the policy's chunks and mark the
+    row ready, or mark it failed. Chunks and the Policy row are written in one
+    transaction, so a failure leaves the previous state untouched. Returns
+    whether it succeeded; never raises."""
     db = SessionLocal()
 
     try:
@@ -87,17 +87,10 @@ def persist(policy_id: int, result: dict) -> bool:
             for c in result["chunks"]
         ]
 
-        vectordb = get_vectordb()
+        # Embedding is slow CPU work; do it before any writes.
+        embeddings = chunk_store.embed_documents(chunks)
 
-        # Idempotent re-runs (re-index, retried job): replace this policy's
-        # old chunks. Add first, delete after, so a failed add (e.g. an
-        # embedding quota error) leaves the previous chunks in place.
-        old_ids = vectordb.get(where={"policy_id": str(policy_id)}, include=[])["ids"]
-
-        vectordb.add_documents(chunks)
-
-        if old_ids:
-            vectordb.delete(ids=old_ids)
+        chunk_store.replace_policy_chunks(db, policy_id, policy.user_id, chunks, embeddings)
 
         summary = result["summary"]
 
@@ -123,7 +116,7 @@ def persist(policy_id: int, result: dict) -> bool:
 
         if policy is not None:
             # A failed *re-index* of an already-ready policy keeps it ready:
-            # its previous chunks are still in place (see add-then-delete above).
+            # the rollback above left its previous chunks in place.
             if policy.status != "ready":
                 policy.status = "failed"
             policy.error_message = str(e)

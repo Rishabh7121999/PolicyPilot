@@ -1,15 +1,15 @@
 import logging
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 import requests
-from langchain_community.retrievers import BM25Retriever
 from langchain_core.documents import Document
-from langchain_core.retrievers import BaseRetriever
-from langchain_classic.retrievers import EnsembleRetriever
 
 from backend.config import JINA_API_KEY
 from backend.core.rate_limiter import QuotaExceeded, acquire, record_usage
-from backend.rag.vectorstore import get_vectordb
+from backend.db import SessionLocal
+from backend.rag import chunk_store
+from backend.rag.vectorstore import get_embeddings
 
 logger = logging.getLogger(__name__)
 
@@ -28,82 +28,62 @@ SPARSE_FETCH_K = 12
 # Final number of chunks handed to the LLM, after reranking.
 FINAL_K = 8
 
-vectordb = get_vectordb()
+# Reciprocal rank fusion: a chunk's score is sum(weight / (RRF_K + rank)) over
+# the legs that returned it. 60 and equal weights match what the previous
+# langchain EnsembleRetriever did.
+RRF_K = 60
+DENSE_WEIGHT = 0.5
+SPARSE_WEIGHT = 0.5
 
 _rerank_session = requests.Session()
-_bm25_corpus_docs: list[Document] | None = None
 
 
-def _load_corpus() -> list[Document]:
-    """Pull every chunk out of Chroma to build the BM25 (keyword) index from.
+def _fuse(dense: list[Document], sparse: list[Document]) -> list[Document]:
+    """Merge the two ranked lists with weighted reciprocal rank fusion."""
+    scores: dict[int, float] = {}
+    by_id: dict[int, Document] = {}
 
-    BM25 has no notion of a persistent index the way Chroma does -- it's an
-    in-memory structure over a fixed document list, so it has to be rebuilt
-    from the vector store's contents. Fine at this app's scale (thousands of
-    chunks, not millions).
+    for weight, ranked in ((DENSE_WEIGHT, dense), (SPARSE_WEIGHT, sparse)):
+        for rank, doc in enumerate(ranked, start=1):
+            chunk_id = doc.metadata["chunk_id"]
+            by_id[chunk_id] = doc
+            scores[chunk_id] = scores.get(chunk_id, 0.0) + weight / (RRF_K + rank)
+
+    return [by_id[chunk_id] for chunk_id in sorted(scores, key=scores.get, reverse=True)]
+
+
+def hybrid_search(
+    query: str,
+    policy_id: int | None = None,
+    policy_type: str | None = None,
+    user_id: int | None = None,
+) -> list[Document]:
+    """Dense (pgvector cosine) + sparse (Postgres full text) search fused with
+    reciprocal rank fusion. Candidates come back in fused order, not yet
+    reranked -- see `retrieve()` for the full pipeline.
+
+    Scope: `user_id` restricts to that user's chunks; then `policy_id` (one
+    policy) takes precedence over `policy_type` (all of the user's policies of
+    that type).
     """
-    raw = vectordb.get(include=["documents", "metadatas"])
+    query_embedding = get_embeddings().embed_query(query)
+    scope = dict(policy_id=policy_id, policy_type=policy_type, user_id=user_id)
 
-    return [
-        Document(page_content=text, metadata=metadata or {})
-        for text, metadata in zip(raw["documents"], raw["metadatas"])
-    ]
+    def run_dense():
+        with SessionLocal() as db:
+            return chunk_store.dense_search(db, query_embedding, DENSE_FETCH_K, **scope)
 
+    def run_sparse():
+        with SessionLocal() as db:
+            return chunk_store.sparse_search(db, query, SPARSE_FETCH_K, **scope)
 
-def invalidate_bm25_cache() -> None:
-    """Call after add_documents()/delete() so the next query rebuilds the BM25 index."""
-    global _bm25_corpus_docs
-    _bm25_corpus_docs = None
-
-
-def _get_bm25_corpus() -> list[Document]:
-    global _bm25_corpus_docs
-
-    if _bm25_corpus_docs is None:
-        _bm25_corpus_docs = _load_corpus()
-
-    return _bm25_corpus_docs
-
-
-def _matches_filter(doc: Document, metadata_filter: dict | None) -> bool:
-    if not metadata_filter:
-        return True
-
-    return all(doc.metadata.get(key) == value for key, value in metadata_filter.items())
-
-
-def get_hybrid_retriever(metadata_filter: dict | None = None) -> BaseRetriever:
-    """Dense (Chroma/MMR) + sparse (BM25) retrieval, fused with reciprocal
-    rank fusion. Returns candidates in fused order, not yet reranked -- see
-    `retrieve()` for the full pipeline.
-
-    metadata_filter: e.g. {"policy_type": "health"} or {"policy_id": "3"}.
-    """
-    dense_search_kwargs = {"k": DENSE_FETCH_K, "fetch_k": DENSE_FETCH_K * 3}
-
-    if metadata_filter:
-        dense_search_kwargs["filter"] = metadata_filter
-
-    dense_retriever = vectordb.as_retriever(
-        search_type="mmr",
-        search_kwargs=dense_search_kwargs,
-    )
-
-    corpus = _get_bm25_corpus()
-    filtered_corpus = [doc for doc in corpus if _matches_filter(doc, metadata_filter)]
-
-    # BM25Retriever errors on an empty corpus (e.g. a brand-new, empty vector
-    # store) -- fall back to dense-only in that case.
-    if not filtered_corpus:
-        return dense_retriever
-
-    bm25_retriever = BM25Retriever.from_documents(filtered_corpus)
-    bm25_retriever.k = min(SPARSE_FETCH_K, len(filtered_corpus))
-
-    return EnsembleRetriever(
-        retrievers=[dense_retriever, bm25_retriever],
-        weights=[0.5, 0.5],
-    )
+    # Each query is sub-millisecond in Postgres; the time is the network round
+    # trip to Neon, so overlap the two legs (separate sessions: one connection
+    # can't run two queries at once).
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        dense_future = pool.submit(run_dense)
+        sparse_future = pool.submit(run_sparse)
+        return _fuse(dense_future.result(), sparse_future.result())
 
 
 def rerank(query: str, docs: list[Document], k: int = FINAL_K) -> tuple[list[Document], bool]:
@@ -153,12 +133,14 @@ def rerank(query: str, docs: list[Document], k: int = FINAL_K) -> tuple[list[Doc
 
 def retrieve(
     query: str,
-    metadata_filter: dict | None = None,
+    policy_id: int | None = None,
+    policy_type: str | None = None,
+    user_id: int | None = None,
     k: int = FINAL_K,
 ) -> tuple[list[Document], dict]:
     """Hybrid retrieval + rerank. Returns (docs, info) where info carries
     `rerank` (seconds) and `rerank_fallback` (bool) for the timings dict."""
-    candidates = get_hybrid_retriever(metadata_filter).invoke(query)
+    candidates = hybrid_search(query, policy_id, policy_type, user_id)
 
     start = time.time()
     docs, fell_back = rerank(query, candidates, k)

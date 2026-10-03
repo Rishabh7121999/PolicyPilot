@@ -1,5 +1,5 @@
-"""Client-side rate limiting for every external API call (Gemini models and
-the Jina reranker), so the app stays inside each model's per-minute and
+"""Client-side rate limiting for every external API call (Gemini chat models
+and the Jina reranker; speech is local), so the app stays inside each model's per-minute and
 per-day quotas instead of finding out from a 429.
 
 Usage is recorded in a small SQLite file (RATE_LIMIT_DB_PATH) rather than in
@@ -40,7 +40,6 @@ class Limits:
 LIMITS: dict[str, Limits] = {
     "gemini-3.1-flash-lite": Limits(rpm=15, tpm=250_000, rpd=500),
     "gemini-3.5-flash-lite": Limits(rpm=15, tpm=250_000, rpd=500),
-    "gemini-3.8-flash-lite-tts": Limits(rpm=3, tpm=10_000, rpd=10),
     "jina-reranker": Limits(rpm=100, tpm=100_000),
 }
 

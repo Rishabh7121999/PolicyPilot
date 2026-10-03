@@ -176,6 +176,7 @@ def _answer_question_stream(
             policy_type=policy_type,
             standalone_query=standalone_query,
             voice=voice,
+            user_id=user_id,
         )
 
         yield from _stream_answer(stream, resolved_policy)
@@ -233,6 +234,7 @@ def _answer_question_stream(
         policy_type=resolved_policy_type,
         standalone_query=resolution.standalone_question,
         voice=voice,
+        user_id=user_id,
     )
 
     yield from _stream_answer(stream, resolved_policy)

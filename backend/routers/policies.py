@@ -12,8 +12,7 @@ from backend.deps import get_current_user
 from backend.models import Policy, User
 from backend.schemas import PolicyDetail, PolicyListItem, PolicyTypeUpdate, PolicyUploadResponse
 from backend.services.ingestion import run_ingestion_job
-from backend.rag.retriever import invalidate_bm25_cache
-from backend.rag.vectorstore import get_vectordb
+from backend.rag import chunk_store
 
 router = APIRouter(prefix="/policies", tags=["policies"])
 
@@ -112,20 +111,9 @@ def update_policy_type(
         raise HTTPException(status_code=404, detail="Policy not found")
 
     policy.policy_type = body.policy_type
+    chunk_store.set_policy_type(db, policy_id, body.policy_type)
     db.commit()
     db.refresh(policy)
-
-    vectordb = get_vectordb()
-    existing = vectordb.get(where={"policy_id": str(policy_id)})
-    ids = existing.get("ids") or []
-
-    if ids:
-        metadatas = existing.get("metadatas") or []
-        updated_metadatas = [
-            {**(metadata or {}), "policy_type": body.policy_type} for metadata in metadatas
-        ]
-        vectordb._collection.update(ids=ids, metadatas=updated_metadatas)
-        invalidate_bm25_cache()
 
     return policy
 
@@ -139,9 +127,7 @@ def delete_policy(
     if policy is None or policy.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Policy not found")
 
-    get_vectordb().delete(where={"policy_id": str(policy_id)})
-    invalidate_bm25_cache()
-
+    # The policy's chunks go with it (chunks.policy_id is ON DELETE CASCADE).
     if policy.file_path:
         shutil.rmtree(Path(policy.file_path).parent, ignore_errors=True)
 

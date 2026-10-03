@@ -4,8 +4,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.config import JINA_API_KEY, VITE_DEV_ORIGIN
-from backend.db import Base, engine, sync_columns
 from backend.routers import auth, chat, chat_sessions, policies, voice
+from backend.voice.tts import load_voice
 
 
 @asynccontextmanager
@@ -13,8 +13,10 @@ async def lifespan(app: FastAPI):
     if not JINA_API_KEY:
         raise RuntimeError("JINA_API_KEY is not set (needed for reranking); add it to .env")
 
-    Base.metadata.create_all(bind=engine)
-    sync_columns()
+    # Schema is managed by Alembic (`uv run alembic upgrade head`), not at boot.
+    # Load (and on first run, download) the TTS voice now rather than on the
+    # first voice answer.
+    load_voice()
     yield
 
 
