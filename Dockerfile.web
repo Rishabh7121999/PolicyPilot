@@ -81,6 +81,10 @@ base = 'https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-file
 # Application code goes in LAST: it changes most often, so everything above
 # stays cached when you edit code.
 COPY --chown=app:app backend/ ./backend/
+# Alembic config + migrations: the `migrate` Cloud Run Job runs
+# `alembic upgrade head` from this same image.
+COPY --chown=app:app alembic.ini ./
+COPY --chown=app:app alembic/ ./alembic/
 
 # Cloud Run injects PORT; 8000 is the default for running locally.
 # `sh -c` expands ${PORT}; `exec` makes uvicorn PID 1 so it receives

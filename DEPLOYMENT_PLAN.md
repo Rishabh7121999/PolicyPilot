@@ -1,5 +1,3 @@
--
-
 # Storage rework, Docker, and CI/CD for Cloud Run
 
 ## Context
