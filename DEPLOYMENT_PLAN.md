@@ -116,7 +116,7 @@ Two images from one repo, using `uv` (`uv sync --frozen`), multi-stage, non-root
 ## Phase G: GCP setup, Cloud Run, and CI/CD
 
 **One-time GCP setup**
-- Project and billing account (needed to stay on the always-free tiers after the trial), Artifact Registry repo (cleanup policy: keep the last 3 images), GCS bucket, Secret Manager secrets (`SECRET_KEY`, `GOOGLE_API_KEY`, `JINA_API_KEY`, `DATABASE_URL`), runtime service account with least privilege (bucket access, secret access, `run.jobs.run` for triggering the ingest job).
+- Project and billing account (needed to stay on the always-free tiers after the trial), Artifact Registry repo (cleanup policy: keep the last 3 images), GCS bucket, Secret Manager secrets (`SECRET_KEY`, `JINA_API_KEY`, `DATABASE_URL`), runtime service account with least privilege (`roles/aiplatform.user` for Gemini on Vertex, bucket access, secret access, `run.jobs.run` for triggering the ingest job).
 - **Cost controls:** budget alert (for example 80% of a small monthly cap), `max-instances` on the service (2–3) and the job, and keep the job timeout at 30 minutes so a hung ingestion can't run up CPU time.
 
 **Cloud Run service `web`**

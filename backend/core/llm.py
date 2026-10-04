@@ -21,6 +21,7 @@ from langchain_core.runnables import Runnable, RunnableConfig
 from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import BaseModel
 
+from backend.config import GCP_LOCATION, GCP_PROJECT
 from backend.core.rate_limiter import (
     LLMUnavailable,
     ModelOverloaded,
@@ -47,7 +48,11 @@ def translate_api_error(error: Exception, resource: str) -> Exception:
 
     message = str(error)
 
-    if "RESOURCE_EXHAUSTED" in message or "429" in message or "402" in message:
+    if "402" in message:
+        # Billing problem (e.g. depleted prepaid credits): waiting won't fix it.
+        return QuotaExceeded(resource, "billing", 3600)
+
+    if "RESOURCE_EXHAUSTED" in message or "429" in message:
         return QuotaExceeded(resource, "server", 60)
 
     lowered = message.lower()
@@ -189,6 +194,9 @@ def get_chat_model(
     for model in MODEL_ROTATION:
         llm = ChatGoogleGenerativeAI(
             model=model,
+            vertexai=True,
+            project=GCP_PROJECT,
+            location=GCP_LOCATION,
             temperature=0,
             timeout=timeout,
             max_output_tokens=max_output_tokens,

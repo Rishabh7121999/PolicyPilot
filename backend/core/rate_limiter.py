@@ -2,29 +2,26 @@
 and the Jina reranker; speech is local), so the app stays inside each model's per-minute and
 per-day quotas instead of finding out from a 429.
 
-Usage is recorded in a small SQLite file (RATE_LIMIT_DB_PATH) rather than in
-memory, because calls come from more than one process -- the web server and
-each ingestion-job subprocess -- and because daily counts have to survive a
-server restart. Each `acquire()` runs inside `BEGIN IMMEDIATE`, which
-serializes the check-and-record across processes.
+Usage is recorded in the `api_calls` table in Postgres rather than in memory,
+because calls come from many processes -- every web instance and each
+ingestion job -- and because daily counts have to survive restarts. Each
+`acquire()` takes a per-resource advisory lock inside its transaction, which
+serializes the check-and-record across all of them.
 
 Daily windows reset at midnight Pacific time, matching Gemini's RPD reset.
 
     uv run python -m backend.core.rate_limiter   # print current usage vs. limits
-
-In Phase 2 (several Cloud Run instances) this table has to move to the
-shared Postgres database; a local SQLite file is per-instance.
 """
 
 import math
-import sqlite3
 import time
-from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from backend.config import RATE_LIMIT_DB_PATH
+from sqlalchemy import text
+
+from backend.db import SessionLocal
 
 
 @dataclass(frozen=True)
@@ -34,12 +31,13 @@ class Limits:
     rpd: int | None = None
 
 
-# Gemini: AI Studio free-tier limits for this project, as shown on its
-# rate-limit page (2026-10-02). Jina: inferred from observed 429s on the free
+# Gemini on Vertex AI: pay-as-you-go with dynamic shared quota, so these are
+# conservative guard rails against runaway loops, not the real ceiling (no
+# daily cap). Raise them if you hit them. Jina: inferred from observed 429s on the free
 # key (~100K tokens/min); check the Jina dashboard and adjust.
 LIMITS: dict[str, Limits] = {
-    "gemini-3.1-flash-lite": Limits(rpm=15, tpm=250_000, rpd=500),
-    "gemini-3.5-flash-lite": Limits(rpm=15, tpm=250_000, rpd=500),
+    "gemini-3.1-flash-lite": Limits(rpm=300, tpm=1_000_000),
+    "gemini-3.5-flash-lite": Limits(rpm=300, tpm=1_000_000),
     "jina-reranker": Limits(rpm=100, tpm=100_000),
 }
 
@@ -62,7 +60,7 @@ class LLMUnavailable(Exception):
 class QuotaExceeded(LLMUnavailable):
     def __init__(self, resource: str, scope: str, retry_after: float):
         self.resource = resource
-        self.scope = scope  # "minute", "day", or "server" (the API itself said 429/402)
+        self.scope = scope  # "minute", "day", or "server" (the API said 429), or "billing" (the API said 402)
         self.retry_after = max(0.0, retry_after)
         super().__init__(f"{resource}: {scope} quota exhausted, retry in {self.retry_after:.0f}s")
 
@@ -73,32 +71,6 @@ class ModelOverloaded(LLMUnavailable):
 
 def allowed(limit: int) -> int:
     return max(1, math.floor(limit * SAFETY_FACTOR))
-
-
-_schema_ready_for: str | None = None
-
-
-def _connect() -> sqlite3.Connection:
-    """A connection to the counters DB, in SQLite's default journal mode:
-    `BEGIN IMMEDIATE` plus the busy timeout serialize access across
-    processes, and these transactions are tiny, so WAL isn't needed."""
-    global _schema_ready_for
-
-    # isolation_level=None: transactions are opened explicitly in acquire().
-    conn = sqlite3.connect(RATE_LIMIT_DB_PATH, timeout=30, isolation_level=None)
-
-    if _schema_ready_for != str(RATE_LIMIT_DB_PATH):
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS api_calls ("
-            " id INTEGER PRIMARY KEY,"
-            " resource TEXT NOT NULL,"
-            " ts REAL NOT NULL,"
-            " tokens INTEGER NOT NULL)"
-        )
-        conn.execute("CREATE INDEX IF NOT EXISTS ix_api_calls_resource_ts ON api_calls (resource, ts)")
-        _schema_ready_for = str(RATE_LIMIT_DB_PATH)
-
-    return conn
 
 
 def _day_bounds(now: float) -> tuple[float, float]:
@@ -141,40 +113,43 @@ def acquire(resource: str, estimated_tokens: int, max_wait_s: float) -> int:
     while True:
         now = time.time()
 
-        with closing(_connect()) as conn:
-            conn.execute("BEGIN IMMEDIATE")
-            try:
-                conn.execute("DELETE FROM api_calls WHERE ts < ?", (now - RETENTION_S,))
+        with SessionLocal() as db:
+            # Held until COMMIT/ROLLBACK, so two instances can't both see room
+            # and both insert. Per resource: Gemini and Jina don't block each other.
+            db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:r))"), {"r": resource})
+            db.execute(text("DELETE FROM api_calls WHERE ts < :cutoff"), {"cutoff": now - RETENTION_S})
 
-                if limits.rpd is not None:
-                    day_start, day_end = _day_bounds(now)
-                    (calls_today,) = conn.execute(
-                        "SELECT COUNT(*) FROM api_calls WHERE resource = ? AND ts >= ?",
-                        (resource, day_start),
-                    ).fetchone()
-                    if calls_today >= allowed(limits.rpd):
-                        raise QuotaExceeded(resource, "day", day_end - now)
+            if limits.rpd is not None:
+                day_start, day_end = _day_bounds(now)
+                calls_today = db.execute(
+                    text("SELECT COUNT(*) FROM api_calls WHERE resource = :r AND ts >= :start"),
+                    {"r": resource, "start": day_start},
+                ).scalar_one()
+                if calls_today >= allowed(limits.rpd):
+                    db.rollback()
+                    raise QuotaExceeded(resource, "day", day_end - now)
 
-                rows = conn.execute(
-                    "SELECT ts, tokens FROM api_calls WHERE resource = ? AND ts > ? ORDER BY ts",
-                    (resource, now - WINDOW_S),
-                ).fetchall()
+            rows = [
+                (r.ts, r.tokens)
+                for r in db.execute(
+                    text("SELECT ts, tokens FROM api_calls WHERE resource = :r AND ts > :since ORDER BY ts"),
+                    {"r": resource, "since": now - WINDOW_S},
+                )
+            ]
 
-                if (
-                    len(rows) + 1 <= allowed(limits.rpm)
-                    and sum(t for _, t in rows) + tokens <= allowed(limits.tpm)
-                ):
-                    cursor = conn.execute(
-                        "INSERT INTO api_calls (resource, ts, tokens) VALUES (?, ?, ?)",
-                        (resource, now, tokens),
-                    )
-                    conn.execute("COMMIT")
-                    return cursor.lastrowid
+            if (
+                len(rows) + 1 <= allowed(limits.rpm)
+                and sum(t for _, t in rows) + tokens <= allowed(limits.tpm)
+            ):
+                reservation_id = db.execute(
+                    text("INSERT INTO api_calls (resource, ts, tokens) VALUES (:r, :ts, :tokens) RETURNING id"),
+                    {"r": resource, "ts": now, "tokens": tokens},
+                ).scalar_one()
+                db.commit()
+                return reservation_id
 
-                wait = _seconds_until_fits(rows, tokens, limits, now)
-            finally:
-                if conn.in_transaction:
-                    conn.execute("ROLLBACK")
+            wait = _seconds_until_fits(rows, tokens, limits, now)
+            db.rollback()  # release the lock before sleeping
 
         if time.monotonic() + wait > deadline:
             raise QuotaExceeded(resource, "minute", wait)
@@ -187,8 +162,12 @@ def record_usage(reservation_id: int, actual_tokens: int | None) -> None:
     if actual_tokens is None:
         return
 
-    with closing(_connect()) as conn:
-        conn.execute("UPDATE api_calls SET tokens = ? WHERE id = ?", (actual_tokens, reservation_id))
+    with SessionLocal() as db:
+        db.execute(
+            text("UPDATE api_calls SET tokens = :tokens WHERE id = :id"),
+            {"tokens": actual_tokens, "id": reservation_id},
+        )
+        db.commit()
 
 
 def usage_snapshot() -> dict[str, dict]:
@@ -196,16 +175,16 @@ def usage_snapshot() -> dict[str, dict]:
     day_start, _ = _day_bounds(now)
     snapshot = {}
 
-    with closing(_connect()) as conn:
+    with SessionLocal() as db:
         for resource, limits in LIMITS.items():
-            calls_min, tokens_min = conn.execute(
-                "SELECT COUNT(*), COALESCE(SUM(tokens), 0) FROM api_calls WHERE resource = ? AND ts > ?",
-                (resource, now - WINDOW_S),
-            ).fetchone()
-            (calls_day,) = conn.execute(
-                "SELECT COUNT(*) FROM api_calls WHERE resource = ? AND ts >= ?",
-                (resource, day_start),
-            ).fetchone()
+            calls_min, tokens_min = db.execute(
+                text("SELECT COUNT(*), COALESCE(SUM(tokens), 0) FROM api_calls WHERE resource = :r AND ts > :since"),
+                {"r": resource, "since": now - WINDOW_S},
+            ).one()
+            calls_day = db.execute(
+                text("SELECT COUNT(*) FROM api_calls WHERE resource = :r AND ts >= :start"),
+                {"r": resource, "start": day_start},
+            ).scalar_one()
             snapshot[resource] = {
                 "rpm": f"{calls_min}/{allowed(limits.rpm)}",
                 "tpm": f"{tokens_min}/{allowed(limits.tpm)}",

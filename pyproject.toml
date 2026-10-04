@@ -23,6 +23,7 @@ dependencies = [
     "psycopg[binary]>=3.3.6",
     "alembic>=1.20.0",
     "pgvector>=0.5.0",
+    "google-cloud-storage>=3.16.0",
 ]
 
 [dependency-groups]

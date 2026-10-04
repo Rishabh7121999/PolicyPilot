@@ -131,3 +131,16 @@ class Chunk(Base):
         ),
         Index("ix_chunks_tsv", "tsv", postgresql_using="gin"),
     )
+
+
+class ApiCall(Base):
+    """One reserved external API call (see backend/core/rate_limiter.py). Lives
+    in Postgres so every Cloud Run instance and job counts against one quota."""
+
+    __tablename__ = "api_calls"
+    __table_args__ = (Index("ix_api_calls_resource_ts", "resource", "ts"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    resource: Mapped[str] = mapped_column(String, nullable=False)
+    ts: Mapped[float] = mapped_column(Float, nullable=False)  # unix seconds
+    tokens: Mapped[int] = mapped_column(Integer, nullable=False)

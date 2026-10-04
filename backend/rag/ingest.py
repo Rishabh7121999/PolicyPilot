@@ -20,6 +20,7 @@ load_dotenv()
 
 from sqlalchemy import select
 
+from backend import storage
 from backend.config import BASE_DIR
 from backend.db import SessionLocal
 from backend.models import Policy
@@ -44,7 +45,7 @@ def _policies_to_reindex(only: set[int] | None) -> list[tuple[int, str]]:
 
         rows = db.execute(query).scalars().all()
 
-        return [(p.id, p.file_path) for p in rows if p.file_path and Path(p.file_path).exists()]
+        return [(p.id, p.file_path) for p in rows if p.file_path and storage.exists(p.file_path)]
     finally:
         db.close()
 

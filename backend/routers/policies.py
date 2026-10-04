@@ -1,12 +1,11 @@
-import shutil
-from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.config import UPLOADS_DIR
+from backend import storage
 from backend.db import get_db
 from backend.deps import get_current_user
 from backend.models import Policy, User
@@ -17,6 +16,12 @@ from backend.rag import chunk_store
 router = APIRouter(prefix="/policies", tags=["policies"])
 
 VALID_POLICY_TYPES = {"health", "life", "motor"}
+
+
+def _chunks(f, size: int = 1024 * 1024):
+    with f:
+        while chunk := f.read(size):
+            yield chunk
 
 
 @router.get("", response_model=list[PolicyListItem])
@@ -58,14 +63,10 @@ def upload_policy(
     db.commit()
     db.refresh(policy)
 
-    policy_dir = UPLOADS_DIR / str(policy.id)
-    policy_dir.mkdir(parents=True, exist_ok=True)
-    file_path = policy_dir / file.filename
+    key = storage.make_key(policy.id, file.filename)
+    storage.save(key, file.file)
 
-    with open(file_path, "wb") as f:
-        shutil.copyfileobj(file.file, f)
-
-    policy.file_path = str(file_path)
+    policy.file_path = key
     db.commit()
 
     background_tasks.add_task(run_ingestion_job, policy.id)
@@ -82,13 +83,13 @@ def download_policy_file(
     if policy is None or policy.user_id != current_user.id or not policy.file_path:
         raise HTTPException(status_code=404, detail="Policy not found")
 
-    if not Path(policy.file_path).exists():
+    if not storage.exists(policy.file_path):
         raise HTTPException(status_code=404, detail="Policy file not found")
 
-    return FileResponse(
-        policy.file_path,
-        filename=policy.source_file,
+    return StreamingResponse(
+        _chunks(storage.open_file(policy.file_path)),
         media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(policy.source_file)}"},
     )
 
 
@@ -128,8 +129,11 @@ def delete_policy(
         raise HTTPException(status_code=404, detail="Policy not found")
 
     # The policy's chunks go with it (chunks.policy_id is ON DELETE CASCADE).
-    if policy.file_path:
-        shutil.rmtree(Path(policy.file_path).parent, ignore_errors=True)
-
+    # The row goes first: a leftover object is harmless, a row pointing at a
+    # missing file is a visible bug.
+    file_key = policy.file_path
     db.delete(policy)
     db.commit()
+
+    if file_key:
+        storage.delete(file_key)

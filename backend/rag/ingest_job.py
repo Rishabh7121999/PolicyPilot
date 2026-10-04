@@ -26,6 +26,7 @@ load_dotenv()
 
 from langchain_core.documents import Document
 
+from backend import storage
 from backend.db import SessionLocal
 from backend.models import Policy
 from backend.rag import chunk_store
@@ -47,7 +48,8 @@ def process(policy_id: int) -> dict:
         if policy is None:
             return {"ok": False, "error": f"Policy {policy_id} not found"}
 
-        chunks, full_text = parse_and_chunk(policy.file_path, policy_id=policy_id)
+        with storage.local_copy(policy.file_path) as pdf_path:
+            chunks, full_text = parse_and_chunk(pdf_path, policy_id=policy_id)
         summary = extract_policy_summary(full_text)
 
         for chunk in chunks:
