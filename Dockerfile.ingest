@@ -1,0 +1,71 @@
+# ============================================================
+# Stage 1: builder -- installs Python dependencies (incl. Docling + torch)
+# ============================================================
+FROM python:3.13-slim AS builder
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_PYTHON_DOWNLOADS=never
+
+WORKDIR /app
+
+COPY pyproject.toml uv.lock ./
+
+# Same as the web image plus `--group ingest`: Docling and torch. On Linux
+# uv.lock resolves torch from PyTorch's CPU-only index (see pyproject.toml),
+# so no CUDA libraries end up in the image.
+RUN uv sync --frozen --no-dev --group ingest --no-install-project
+
+
+# ============================================================
+# Stage 2: runtime
+# ============================================================
+FROM python:3.13-slim
+
+# opencv (pulled in by Docling's OCR engine) links against these two system
+# libraries, which the slim base image doesn't include. --no-install-recommends
+# and removing the apt lists keep the layer small.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgl1 libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+RUN useradd --create-home --uid 1000 app
+
+COPY --from=builder --chown=app:app /app/.venv /app/.venv
+
+ENV PATH="/app/.venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/app
+
+# DOCLING_ARTIFACTS_PATH is where Docling looks for its models instead of
+# downloading them; HF_HOME is where the chunking tokenizer is cached.
+ENV FASTEMBED_CACHE_PATH=/models/fastembed \
+    DOCLING_ARTIFACTS_PATH=/models/docling \
+    HF_HOME=/models/huggingface
+
+RUN mkdir -p /models && chown app:app /models /app
+
+USER app
+
+# Bake every model the job uses, so a job run never downloads anything:
+#  - Docling's layout + table-structure + OCR models (only these three: the
+#    default set also has code/picture models our pipeline doesn't use)
+#  - the bge-small tokenizer, which sizes the chunks (loader.py)
+#  - the bge-small embedding model, since persist() embeds the chunks
+# Before the code is copied, so a code edit doesn't re-download them.
+RUN docling-tools models download layout tableformer rapidocr -o /models/docling \
+    && python -c "\
+from transformers import AutoTokenizer; AutoTokenizer.from_pretrained('BAAI/bge-small-en-v1.5'); \
+from fastembed import TextEmbedding; TextEmbedding('BAAI/bge-small-en-v1.5', cache_dir='/models/fastembed')"
+
+COPY --chown=app:app backend/ ./backend/
+
+# A job, not a server: it runs once, exits, and Cloud Run reads the exit code
+# (0 = success). ENTRYPOINT fixes the command; the job supplies the arguments
+# (`--policy-id N`), which is what `gcloud run jobs execute --args` does.
+ENTRYPOINT ["python", "-m", "backend.rag.ingest_job"]

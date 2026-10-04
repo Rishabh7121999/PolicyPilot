@@ -24,6 +24,7 @@ dependencies = [
     "alembic>=1.20.0",
     "pgvector>=0.5.0",
     "google-cloud-storage>=3.16.0",
+    "google-cloud-run>=0.10.0",
 ]
 
 [dependency-groups]
@@ -31,4 +32,19 @@ dependencies = [
 # in torch -- keep it out of the web image. `uv sync --group ingest` to add it.
 ingest = [
     "docling>=2.130.0",
+    # Listed directly so the [tool.uv.sources] below apply to them (uv only
+    # applies sources to direct dependencies, not ones docling pulls in).
+    "torch",
+    "torchvision",
 ]
+
+# On Linux (the Docker images, Cloud Run) use PyTorch's CPU-only wheels, which
+# skips ~2 GB of CUDA libraries there is no GPU to use. macOS is unaffected.
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+torchvision = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true

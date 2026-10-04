@@ -1,17 +1,19 @@
+-
+
 # Storage rework, Docker, and CI/CD for Cloud Run
 
 ## Context
 
 Phase 1 (done and committed) made the backend light enough for scale-to-zero hosting: local `bge-small` embeddings (fastembed/ONNX), the Jina reranker API, Docling as a separate ingestion job, rate limiting with model rotation, and local Kokoro TTS. Nothing is deployed, and **everything still lives on local disk**:
 
-| Thing | Today | Why it can't go to Cloud Run as-is |
-|---|---|---|
-| App database | SQLite `backend/policies.db` (`config.py:DATABASE_URL`, `db.py`) | Cloud Run's disk is wiped on every instance restart |
-| Vector store | Chroma in `vectordb/` (34 MB) via `rag/vectorstore.py`, `rag/retriever.py` | Same, and a local Chroma client can't be shared by the web service and the ingestion job |
-| Keyword search | In-memory BM25 rebuilt from Chroma (`retriever.py:_load_corpus`) | Per-instance cache that can't be invalidated across instances |
-| Rate-limit counters | SQLite `backend/rate_limits.db` (`core/rate_limiter.py`) | Each instance would count separately and exceed the real quota |
-| Uploaded PDFs | `backend/uploads/<policy_id>/` (`routers/policies.py`) | The ingestion Job runs in a different container and can't see the web container's disk |
-| Docker / CI | none | n/a |
+| Thing               | Today                                                                           | Why it can't go to Cloud Run as-is                                                       |
+| ------------------- | ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| App database        | SQLite`backend/policies.db` (`config.py:DATABASE_URL`, `db.py`)           | Cloud Run's disk is wiped on every instance restart                                      |
+| Vector store        | Chroma in`vectordb/` (34 MB) via `rag/vectorstore.py`, `rag/retriever.py` | Same, and a local Chroma client can't be shared by the web service and the ingestion job |
+| Keyword search      | In-memory BM25 rebuilt from Chroma (`retriever.py:_load_corpus`)              | Per-instance cache that can't be invalidated across instances                            |
+| Rate-limit counters | SQLite`backend/rate_limits.db` (`core/rate_limiter.py`)                     | Each instance would count separately and exceed the real quota                           |
+| Uploaded PDFs       | `backend/uploads/<policy_id>/` (`routers/policies.py`)                      | The ingestion Job runs in a different container and can't see the web container's disk   |
+| Docker / CI         | none                                                                            | n/a                                                                                      |
 
 **Goal:** move all state to managed free-tier services, then containerize, then automate deploys. The app runs from Cloud Run with no local state. Free API keys stay (decided earlier); the cost controls are in Phase G.
 
@@ -28,6 +30,7 @@ Gemini / Jina APIs (free keys)
 **Why storage first, then Docker, then CI/CD:** Docker images built before the storage move would still contain SQLite and Chroma on a disk Cloud Run wipes, so they'd be rebuilt after. Every storage phase can be developed and tested on the laptop with `uv run`.
 
 **Decisions made here**
+
 - The vector store is **a `chunks` table in Neon with pgvector**, not a separate service and not on GCP. Neon's free tier (0.5 GB) holds our corpus many times over.
 - Embedding dimension stays **384** (bge-small). The old plan's 768 was for Gemini embeddings, which we dropped.
 - Retrieval keeps the same pipeline shape (dense + keyword, fused with reciprocal rank fusion, then Jina rerank). Only the stores underneath change, and `retriever.retrieve(query, metadata_filter)` keeps its signature, so `core/insurance_bot.py` and the chat services don't change.
@@ -46,18 +49,19 @@ Gemini / Jina APIs (free keys)
 
 **New table `chunks`** (migration adds `CREATE EXTENSION IF NOT EXISTS vector`):
 
-| Column | Notes |
-|---|---|
-| `id` | bigserial PK |
-| `policy_id` | FK to `policies.id`, `ON DELETE CASCADE` (replaces `vectordb.delete(where=policy_id)` in `routers/policies.py:142`) |
-| `user_id` | copied from the policy; see "security note" below |
-| `policy_type` | nullable; replaces Chroma metadata, updated by SQL `UPDATE` instead of `_collection.update` (`routers/policies.py:118-128`) |
-| `source_file`, `page`, `section`, `chunk_index` | the metadata that citations and `PolicyViewerDialog` use today |
-| `content` | the chunk text |
-| `embedding` | `vector(384)`, with an HNSW index using `vector_cosine_ops` |
-| `tsv` | generated `tsvector` from `content` (`english`), with a GIN index |
+| Column                                                  | Notes                                                                                                                            |
+| ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                                                  | bigserial PK                                                                                                                     |
+| `policy_id`                                           | FK to`policies.id`, `ON DELETE CASCADE` (replaces `vectordb.delete(where=policy_id)` in `routers/policies.py:142`)       |
+| `user_id`                                             | copied from the policy; see "security note" below                                                                                |
+| `policy_type`                                         | nullable; replaces Chroma metadata, updated by SQL`UPDATE` instead of `_collection.update` (`routers/policies.py:118-128`) |
+| `source_file`, `page`, `section`, `chunk_index` | the metadata that citations and`PolicyViewerDialog` use today                                                                  |
+| `content`                                             | the chunk text                                                                                                                   |
+| `embedding`                                           | `vector(384)`, with an HNSW index using `vector_cosine_ops`                                                                  |
+| `tsv`                                                 | generated`tsvector` from `content` (`english`), with a GIN index                                                           |
 
 **Code changes**
+
 - `backend/rag/vectorstore.py`: keep `LocalEmbeddings` and `get_embeddings()` (fastembed, reused as-is). Replace `get_vectordb()` and the Chroma collection with a small `chunk_store` module (SQLAlchemy models via the `pgvector` package's `Vector` type, plus `add_chunks(policy_id, user_id, docs)`, `replace_policy_chunks(...)`, `set_policy_type(policy_id, type)`). Remove `COLLECTION_NAME` / `PERSIST_DIRECTORY`.
 - `backend/rag/retriever.py`: replace `get_hybrid_retriever`, `_load_corpus`, `invalidate_bm25_cache` with two SQL queries and a fusion step:
   - Dense: `ORDER BY embedding <=> :query_vec LIMIT DENSE_FETCH_K` with the same filter rules as today (`policy_id`, else `policy_type`, else none).
@@ -100,11 +104,13 @@ Gemini / Jina APIs (free keys)
 Two images from one repo, using `uv` (`uv sync --frozen`), multi-stage, non-root user, `PORT` env.
 
 **`Dockerfile.web`** (target well under 1.5 GB):
+
 - `python:3.13-slim`, `uv sync --frozen --no-dev` (main dependencies only; no torch, no Docling).
 - Bake models at build time so cold starts never download: fastembed `bge-small` (`FASTEMBED_CACHE_PATH`), Kokoro int8 model and voices (`KOKORO_MODEL_DIR`, ~120 MB, via the existing `_download()` in `voice/tts.py`), faster-whisper `base` (`HF_HOME`).
 - Command: `uvicorn backend.main:app --host 0.0.0.0 --port $PORT`.
 
 **`Dockerfile.ingest`:**
+
 - Same base plus `uv sync --frozen --group ingest`, with CPU-only torch wheels (the PyTorch CPU index) so the image doesn't carry ~2 GB of CUDA libraries.
 - Bake the Docling models (layout, TableFormer, OCR) so the job doesn't download them on every run.
 - Entry point: `python -m backend.rag.ingest_job`.
@@ -116,10 +122,12 @@ Two images from one repo, using `uv` (`uv sync --frozen`), multi-stage, non-root
 ## Phase G: GCP setup, Cloud Run, and CI/CD
 
 **One-time GCP setup**
+
 - Project and billing account (needed to stay on the always-free tiers after the trial), Artifact Registry repo (cleanup policy: keep the last 3 images), GCS bucket, Secret Manager secrets (`SECRET_KEY`, `JINA_API_KEY`, `DATABASE_URL`), runtime service account with least privilege (`roles/aiplatform.user` for Gemini on Vertex, bucket access, secret access, `run.jobs.run` for triggering the ingest job).
 - **Cost controls:** budget alert (for example 80% of a small monthly cap), `max-instances` on the service (2–3) and the job, and keep the job timeout at 30 minutes so a hung ingestion can't run up CPU time.
 
 **Cloud Run service `web`**
+
 - 1 vCPU, **2 GiB** (Kokoro ~0.3 GB + Whisper ~0.3 GB + fastembed + Python, with headroom), min instances 0, CPU boost on for cold starts, concurrency ~4 (TTS is serialized by `_synth_lock` and Whisper is CPU-bound, so higher concurrency just queues), request timeout 300s, secrets mounted from Secret Manager, env: `ENV=prod`, `INGESTION_MODE=cloudrun`, `GCS_BUCKET`, `CORS_ORIGINS`.
 - Cold start budget: model loads in `lifespan` (Kokoro ~0.5s, Whisper, fastembed) plus Neon wake-up. Measure it; if over ~10s, consider min-instances=1 later (costs idle CPU).
 
@@ -128,6 +136,7 @@ Two images from one repo, using `uv` (`uv sync --frozen`), multi-stage, non-root
 **Migrations:** a Cloud Run Job `migrate` that runs `alembic upgrade head` from the web image, executed before each deploy.
 
 **CI/CD (GitHub Actions, assuming the repo is on GitHub)**
+
 - **Auth:** Workload Identity Federation, no long-lived JSON key in GitHub secrets.
 - **On pull request (checks only):** backend `python -c "import backend.main"` in a clean web-only environment (confirms no torch/Docling import), frontend `npx tsc -b`, `npx oxlint src`, `npm run build`, and a Docker build of both images without pushing.
 - **On push to `main` (deploy):** build and push both images (tag = commit SHA, layer cache via the registry), run the `migrate` job, `gcloud run deploy web`, `gcloud run jobs update ingest`. Path filters so frontend-only changes don't rebuild the images.

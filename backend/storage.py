@@ -19,7 +19,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import BinaryIO, Iterator
 
-from backend.config import GCS_BUCKET, STORAGE_BACKEND, UPLOADS_DIR
+from backend.config import GCP_PROJECT, GCS_BUCKET, STORAGE_BACKEND, UPLOADS_DIR
 
 
 def make_key(policy_id: int, filename: str) -> str:
@@ -57,7 +57,9 @@ class GCSStorage:
         # Imported here so a local-only install never needs the GCS client.
         from google.cloud import storage
 
-        self._bucket = storage.Client().bucket(bucket_name)
+        # Project passed explicitly: ADC user credentials carry none, and a
+        # container has no gcloud config to fall back on.
+        self._bucket = storage.Client(project=GCP_PROJECT).bucket(bucket_name)
 
     def save(self, key: str, fileobj: BinaryIO) -> None:
         self._bucket.blob(key).upload_from_file(fileobj, content_type="application/pdf")

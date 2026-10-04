@@ -1,22 +1,19 @@
 """Ingestion job for one uploaded policy: Docling parse + chunk, Gemini
 structured extraction, then chunk and DB writes (one Postgres transaction).
 
-    python -m backend.rag.ingest_job --policy-id N               # full job, in-process
-    python -m backend.rag.ingest_job --policy-id N --out r.json  # parse + extract only
+    python -m backend.rag.ingest_job --policy-id N
 
-The full form is what `backend.rag.ingest --reindex-all` runs per policy, and
-what the Cloud Run Job will run in production. The `--out` form exists for
-the local backend (backend/services/ingestion.py): it runs this in a
-subprocess -- Docling's model stack has a flaky native crash (loky/joblib
-teardown race) when one process converts more than one PDF -- but keeps the
-writes in the server process.
+This is the whole job. It is what `backend.rag.ingest --reindex-all` runs per
+policy, what the local backend (backend/services/ingestion.py) runs in a
+subprocess, and what the Cloud Run Job runs in production. Always a separate
+process per policy: Docling's model stack has a flaky native crash
+(loky/joblib teardown race) when one process converts more than one PDF.
 
 Only this module and backend/rag/ingest.py import Docling (via
 backend/rag/loader.py), so the web process never needs it installed.
 """
 
 import argparse
-import json
 import logging
 import sys
 
@@ -137,20 +134,10 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--policy-id", type=int, required=True)
-    parser.add_argument(
-        "--out",
-        help="Only parse + extract, writing the result JSON here (writes are left to the caller)",
-    )
     args = parser.parse_args()
 
     result = process(args.policy_id)
-
-    if args.out:
-        with open(args.out, "w") as f:
-            json.dump(result, f)
-        ok = result["ok"]
-    else:
-        ok = persist(args.policy_id, result)
+    ok = persist(args.policy_id, result)
 
     if not result["ok"]:
         print(result["error"], file=sys.stderr)

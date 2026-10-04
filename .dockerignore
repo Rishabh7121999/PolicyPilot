@@ -1,0 +1,52 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Git
+.git/
+.gitignore
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Local databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Local vector stores
+vectordb/
+
+# Uploaded/generated files
+backend/uploads/
+data/
+images/
+
+# Cache
+.cache/
+.pytest_cache/
+.mypy_cache/
+
+# Evaluation results
+evals/results/
+
+# Frontend
+frontend/node_modules/
+frontend/.next/
+
+# Images / local artifacts
+*.png
+*.jpg
+*.jpeg
+
+# IDE / OS
+.DS_Store
+.vscode/
+.idea/
+
+# Logs
+*.log

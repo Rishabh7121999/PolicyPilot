@@ -1,0 +1,89 @@
+# ============================================================
+# Stage 1: builder -- installs Python dependencies
+# ============================================================
+FROM python:3.13-slim AS builder
+
+# Copy the `uv` binary from its official image instead of pip-installing it.
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+# UV_COMPILE_BYTECODE: precompile .pyc files now so the first request after a
+#   cold start doesn't pay for it.
+# UV_LINK_MODE=copy: copy files into the venv instead of hard-linking from
+#   uv's cache (the cache isn't part of the final image).
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_PYTHON_DOWNLOADS=never
+
+WORKDIR /app
+
+# Copy ONLY the dependency manifests first. Docker caches each layer and
+# reuses it while its inputs are unchanged, so editing app code won't
+# re-download every dependency -- only changing these two files will.
+COPY pyproject.toml uv.lock ./
+
+# --frozen: install exactly what uv.lock says, never modify it.
+# --no-dev / no `ingest` group: no torch or Docling in the web image.
+# --no-install-project: install only dependencies; the app code is copied as
+#   plain source in the next stage.
+RUN uv sync --frozen --no-dev --no-install-project
+
+
+# ============================================================
+# Stage 2: runtime -- what actually ships
+# ============================================================
+FROM python:3.13-slim
+
+# The final image gets only the finished virtualenv from the builder (no uv,
+# no build cache). It must live at the same path as in the builder, because a
+# venv hardcodes absolute paths.
+WORKDIR /app
+
+# Create the non-root user BEFORE copying the venv so Docker can set
+# ownership during the COPY itself.
+RUN useradd --create-home --uid 1000 app
+
+COPY --from=builder --chown=app:app /app/.venv /app/.venv
+
+
+# Put the venv first on PATH so `python` and `uvicorn` resolve to it.
+# PYTHONUNBUFFERED: log lines appear immediately in Cloud Logging.
+ENV PATH="/app/.venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/app
+
+# Where the baked models live; the app reads these env vars (tts.py,
+# vectorstore.py), and HF_HOME is where faster-whisper downloads from.
+ENV FASTEMBED_CACHE_PATH=/models/fastembed \
+    KOKORO_MODEL_DIR=/models/kokoro \
+    HF_HOME=/models/huggingface
+
+# Only chown the small directory itself.
+# Do NOT recursively chown /app because the venv is already owned by app.
+RUN mkdir -p /models \
+    && chown app:app /models /app
+    
+USER app
+
+# Bake the models into the image at build time. Without this, every cold
+# start (Cloud Run scales to zero) would download ~500 MB before answering.
+# This runs BEFORE the app code is copied, on purpose: it only depends on the
+# installed libraries, so editing code never re-downloads the models. The
+# names/URLs below must match backend/rag/vectorstore.py, voice/tts.py and
+# voice/stt.py -- if you change a model there, change it here too.
+RUN python -c "\
+from fastembed import TextEmbedding; TextEmbedding('BAAI/bge-small-en-v1.5', cache_dir='/models/fastembed'); \
+from faster_whisper import WhisperModel; WhisperModel('base', device='cpu', compute_type='int8'); \
+import os, urllib.request; os.makedirs('/models/kokoro', exist_ok=True); \
+base = 'https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/'; \
+[urllib.request.urlretrieve(base + f, '/models/kokoro/' + f) for f in ('kokoro-v1.0.int8.onnx', 'voices-v1.0.bin')]"
+
+# Application code goes in LAST: it changes most often, so everything above
+# stays cached when you edit code.
+COPY --chown=app:app backend/ ./backend/
+
+# Cloud Run injects PORT; 8000 is the default for running locally.
+# `sh -c` expands ${PORT}; `exec` makes uvicorn PID 1 so it receives
+# Cloud Run's SIGTERM and shuts down cleanly.
+EXPOSE 8000
+CMD ["sh", "-c", "exec uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
